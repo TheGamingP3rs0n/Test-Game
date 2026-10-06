@@ -1,0 +1,24 @@
+{
+  "name": "scam-call-center",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Single-player scam call center comedy sim with AI callers (Groq), built with Vite + three.js.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@dicebear/avataaars": "^9.4.3",
+    "@dicebear/core": "^9.4.3",
+    "@fontsource/bungee": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/permanent-marker": "^5.3.0",
+    "@fontsource/vt323": "^5.3.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.3"
+  }
+}

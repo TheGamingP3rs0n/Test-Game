@@ -1,0 +1,33 @@
+{
+  "name": "Base Game",
+  "version": 1,
+  "description": "Everything in this folder is loaded at startup. Add your own JSON files and list them here (or import them from the in-game Mods screen).",
+  "callers": [
+    "callers/maggie-thompson.json",
+    "callers/gary-mitchell.json",
+    "callers/brittany-collins.json",
+    "callers/howard-kessler.json",
+    "callers/earl-jenkins.json",
+    "callers/linda-park.json",
+    "callers/chad-brockman.json",
+    "callers/rosa-delgado.json",
+    "callers/florence-pike.json",
+    "callers/derek-nguyen.json",
+    "callers/agnes-baiter.json",
+    "callers/bob-baiter.json"
+  ],
+  "scenarios": [
+    "scenarios/tech-support.json",
+    "scenarios/refund.json",
+    "scenarios/government.json",
+    "scenarios/bank-fraud.json",
+    "scenarios/delivery.json",
+    "scenarios/lottery.json",
+    "scenarios/crypto.json",
+    "scenarios/security-specialist.json"
+  ],
+  "events": [
+    "events/core-disasters.json",
+    "events/office-shenanigans.json"
+  ]
+}

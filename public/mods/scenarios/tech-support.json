@@ -1,0 +1,19 @@
+{
+  "id": "tech-support",
+  "name": "Tech Support Virus",
+  "impersonate": "Windoze Tech Support (a Microsoft-style computer company)",
+  "leadSource": "Pop-up ad: 'VIRUS DETECTED!! CALL WINDOZE SUPPORT NOW'",
+  "callerContext": "A loud flashing pop-up on your computer said your PC is infected with 37 viruses, your bank details are being stolen, and to call this toll-free number immediately. You are calling it.",
+  "unlockDay": 1,
+  "payout": 1.0,
+  "icon": "🦠",
+  "playbook": [
+    "Introduce yourself as a certified Windoze technician with an American name.",
+    "Confirm the 'virus' and make it sound urgent: hackers are in their bank RIGHT NOW.",
+    "Get them to install RemoteHelp and read you the access code.",
+    "On their PC, open Command Prompt and run 'tree' or 'netstat' — tell them it's the hackers.",
+    "Open Event Viewer and show them all the scary red errors.",
+    "Sell a 'Lifetime Security License' — payable only in gift cards, for 'security reasons'."
+  ],
+  "keywords": ["virus", "windoze", "microsoft", "technician", "firewall", "license", "hacker", "remote"]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "crypto",
+  "name": "AI Crypto Trading Bot",
+  "impersonate": "Senior Wealth Advisor at QuantumMoon AI Trading",
+  "leadSource": "Social media ad: 'Turn $250 into $25,000 with our AI Trading Bot!'",
+  "callerContext": "You clicked an ad promising that an AI crypto trading bot can turn $250 into $25,000 in a month and filled out a form. You are calling to learn more and get rich.",
+  "unlockDay": 6,
+  "payout": 1.8,
+  "icon": "🚀",
+  "playbook": [
+    "Talk like a hype finance bro. Use words like 'blockchain', 'AI', 'synergy', 'to the moon'.",
+    "Show them a fake trading dashboard (build one in SiteForge!).",
+    "Get a small 'starter investment', then show it 'growing'.",
+    "Unlock 'premium tier' for a bigger deposit. Withdrawal requires a 'liquidity fee'."
+  ],
+  "keywords": ["crypto", "bitcoin", "invest", "returns", "ai", "trading", "blockchain", "moon", "profit"]
+}

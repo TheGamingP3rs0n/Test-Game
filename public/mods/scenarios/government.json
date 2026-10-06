@@ -1,0 +1,18 @@
+{
+  "id": "government",
+  "name": "Government Tax Warrant",
+  "impersonate": "Officer of the Internal Revenue Department (IRD), Tax Crimes Division",
+  "leadSource": "Robocall voicemail: 'This is the IRD. A warrant has been issued for your arrest.'",
+  "callerContext": "You received a robotic voicemail saying there is an arrest warrant in your name for unpaid back taxes and you must call back immediately to avoid being arrested today.",
+  "unlockDay": 3,
+  "payout": 1.5,
+  "icon": "🏛️",
+  "playbook": [
+    "Sound like a stern government officer with a badge number.",
+    "Read their personal details to prove you're 'official' (check WhoDat in the Browser).",
+    "Explain the back taxes and that police are on their way.",
+    "Show them an official-looking 'Arrest Warrant' from DocForge.",
+    "Offer to 'settle' the debt today with gift cards or crypto to cancel the warrant."
+  ],
+  "keywords": ["tax", "warrant", "arrest", "irs", "ird", "officer", "badge", "government", "police", "back taxes"]
+}

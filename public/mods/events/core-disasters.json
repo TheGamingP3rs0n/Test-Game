@@ -1,0 +1,31 @@
+{
+  "events": [
+    { "id": "power-failure", "type": "power_failure", "name": "Power Failure", "minDay": 1, "weight": 3, "timeLimit": 45,
+      "message": "⚡ The power just died! Flip the breakers in the fuse box on the west wall.",
+      "background": "There is a loud electrical POP and the agent's office goes dead silent except for people screaming in the dark." },
+    { "id": "headset-broken", "type": "headset", "name": "Headset Malfunction", "minDay": 1, "weight": 2, "timeLimit": 40,
+      "message": "🎧 Your headset is screeching feedback! Grab a new one from the supply cabinet (south wall).",
+      "background": "There is horrible ear-piercing microphone feedback on the line." },
+    { "id": "boss-patrol", "type": "boss_visit", "name": "Boss Patrol", "minDay": 1, "weight": 2, "timeLimit": 25,
+      "message": "👀 Mr. Chatterjee is patrolling the floor. Be on a call or at your computer when he reaches you!",
+      "background": "A man is screaming 'QUOTA! QUOTA! WHERE IS MY MONEY?!' somewhere behind the agent." },
+    { "id": "computer-virus", "type": "virus", "name": "Computer Virus", "minDay": 2, "weight": 2, "timeLimit": 60,
+      "message": "🦠 Your own PC got a virus! Close the pop-ups and run the Antivirus app.",
+      "background": "The agent's computer keeps playing loud error sounds and a voice saying 'YOUR COMPUTER HAS BEEN HACKED'." },
+    { "id": "internet-down", "type": "internet", "name": "Internet Outage", "minDay": 2, "weight": 2, "timeLimit": 45,
+      "message": "📡 The internet is down! Reboot the router on the side table near the kitchen.",
+      "background": "The agent is yelling 'IS THE WIFI DOWN?!' at someone." },
+    { "id": "cow-visit", "type": "visitor", "name": "Unexpected Visitor: A Cow", "minDay": 2, "weight": 2, "timeLimit": 50, "visitor": "cow",
+      "message": "🐄 A cow has wandered into the office. Gently shoo it out (walk up and press E a few times).",
+      "background": "A cow is mooing VERY loudly right next to the agent." },
+    { "id": "police-raid", "type": "police_raid", "name": "Police Raid", "minDay": 3, "weight": 2, "timeLimit": 30,
+      "message": "🚨 POLICE RAID! Shred the evidence at the shredder (near the boss's office) and hide under your desk (C) before they get upstairs!",
+      "background": "Police sirens are wailing and someone outside is shouting through a megaphone: 'THIS IS THE POLICE, NOBODY MOVE!'" },
+    { "id": "office-fire", "type": "fire", "name": "Office Fire", "minDay": 3, "weight": 2, "timeLimit": 45,
+      "message": "🔥 Vikram microwaved a fork. THE OFFICE IS ON FIRE. Grab the extinguisher by the kitchen and put out the flames!",
+      "background": "A fire alarm is blaring and people are screaming 'FIRE! FIRE!' on the agent's end." },
+    { "id": "air-strike", "type": "air_strike", "name": "Air Strike Drill (Hopefully)", "minDay": 4, "weight": 1, "timeLimit": 12,
+      "message": "✈️ AIR RAID SIREN! Get under your desk (press C) NOW!",
+      "background": "An air-raid siren is wailing and there are distant explosions on the agent's end. The agent sounds like they're under a desk." }
+  ]
+}

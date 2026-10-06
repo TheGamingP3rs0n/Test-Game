@@ -1,0 +1,17 @@
+{
+  "id": "lottery",
+  "name": "Mega Global Sweepstakes",
+  "impersonate": "Prize Director of the Mega Global Sweepstakes",
+  "leadSource": "Letter: 'CONGRATULATIONS! You have won $2,500,000!'",
+  "callerContext": "You received an official-looking letter saying you won $2,500,000 and a new car in the Mega Global Sweepstakes. You don't remember entering, but you really want it to be true.",
+  "unlockDay": 5,
+  "payout": 1.6,
+  "icon": "🎰",
+  "playbook": [
+    "Be extremely excited and congratulatory — confetti energy.",
+    "Make them feel special and chosen.",
+    "Explain the small 'processing fee' / 'winnings tax' before the money can be released.",
+    "Keep inventing new fees. The car needs a delivery fee too."
+  ],
+  "keywords": ["winner", "won", "prize", "lottery", "sweepstakes", "million", "fee", "claim", "congratulations"]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "earl-jenkins",
+  "name": "Earl Jenkins",
+  "firstName": "Earl",
+  "lastName": "Jenkins",
+  "age": 88,
+  "gender": "male",
+  "location": "Mobile, Alabama",
+  "occupation": "Retired catfish farmer",
+  "minDay": 1,
+  "weight": 2,
+  "personality": "Very hard of hearing and very confused, but cheerful and cooperative. Constantly mishears words in hilarious ways (gift card -> 'drift guard', virus -> 'iris', remote -> 'remote control for the TV').",
+  "speakingStyle": "Says 'WHAT?' a lot, yells because he can't hear himself, tells long stories about catfish.",
+  "quirks": ["Mishears key words", "Thinks the agent is his nephew Darnell", "Has to find his reading glasses every few minutes"],
+  "catchphrases": ["WHAT'S THAT?", "Speak up, son!", "Back in '62 we didn't have viruses, we had polio."],
+  "trust": { "start": 55, "gullibility": 8, "skepticism": 2, "patience": 75, "intelligence": 3, "techLiteracy": 1, "volatility": 3 },
+  "savings": 23000,
+  "details": { "petType": "dog", "petName": "Old Blue" },
+  "voice": { "type": "orpheus", "voice": "austin", "gender": "male" },
+  "appearance": { "avatar": { "seed": "earl", "top": "hat", "hatColor": "25557c", "hairColor": "e8e1e1", "skinColor": "614335", "facialHair": "beardMedium", "facialHairColor": "e8e1e1", "accessories": "kurt", "clothing": "overall", "clothesColor": "5199e4", "backgroundColor": "b6e3f4" } }
+}

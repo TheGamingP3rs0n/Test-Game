@@ -1,0 +1,18 @@
+{
+  "id": "refund",
+  "name": "The Refund Scam",
+  "impersonate": "GeekPatrol subscription billing department",
+  "leadSource": "Email: 'Your GeekPatrol subscription renewed for $399.99. Call to cancel.'",
+  "callerContext": "You got an email saying your 'GeekPatrol Computer Protection' subscription auto-renewed for $399.99. You never signed up for this and want your money back.",
+  "unlockDay": 2,
+  "payout": 1.2,
+  "icon": "💸",
+  "playbook": [
+    "Apologize for the 'renewal' and offer a full refund.",
+    "Get remote access 'to process the refund'.",
+    "Open their online banking, then use Inspect Element (F12) to edit their balance so it looks like you refunded WAY too much.",
+    "Panic! Say you'll be fired for the mistake and beg them to send back the difference.",
+    "Insist on gift cards because 'bank wires take 6 weeks and I'll lose my job'."
+  ],
+  "keywords": ["refund", "subscription", "cancel", "399", "geekpatrol", "overpaid", "difference", "mistake"]
+}

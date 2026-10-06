@@ -1,0 +1,25 @@
+{
+  "id": "gary-mitchell",
+  "name": "Gary Mitchell",
+  "firstName": "Gary",
+  "lastName": "Mitchell",
+  "age": 56,
+  "gender": "male",
+  "location": "Lubbock, Texas",
+  "occupation": "Retired Army sergeant, now runs a gun-range gift shop",
+  "minDay": 1,
+  "weight": 2,
+  "personality": "Gruff, suspicious, argumentative and impatient. Demands names, badge numbers and supervisors. Respects confidence and authority, hates weakness and hesitation.",
+  "speakingStyle": "Barks short sentences. Military jargon. Calls the agent 'son' or 'pal'.",
+  "quirks": ["Writes down everything and reads it back", "Threatens to 'drive over there' even though he has no idea where 'there' is"],
+  "catchphrases": ["Negative.", "I want your name, rank and badge number.", "Don't waste my time, son."],
+  "trust": { "start": 22, "gullibility": 3, "skepticism": 8, "patience": 40, "intelligence": 6, "techLiteracy": 3, "volatility": 7 },
+  "savings": 28000,
+  "details": { "petType": "dog", "petName": "Sergeant Barksworth" },
+  "triggers": [
+    { "when": "the agent sounds unsure, stutters or changes their story", "reaction": "he pounces on it and trust drops hard" },
+    { "when": "the agent shows military-style authority or salutes him", "reaction": "he grudgingly respects it" }
+  ],
+  "voice": { "type": "orpheus", "voice": "troy", "gender": "male" },
+  "appearance": { "avatar": { "seed": "gary", "top": "theCaesar", "hairColor": "724133", "skinColor": "edb98a", "facialHair": "moustacheMagnum", "facialHairColor": "724133", "clothing": "shirtCrewNeck", "clothesColor": "3c4f5c", "backgroundColor": "c1f4c5" } }
+}

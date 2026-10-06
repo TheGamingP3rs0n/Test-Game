@@ -1,0 +1,17 @@
+{
+  "id": "delivery",
+  "name": "Customs Package Hold",
+  "impersonate": "SpeedyParcel International Customs Desk",
+  "leadSource": "Text: 'Your SpeedyParcel package is held at customs. Call to release.'",
+  "callerContext": "You got a text that a package addressed to you is held at customs and will be destroyed unless you pay a release fee. You are curious and a little excited — you don't remember ordering anything.",
+  "unlockDay": 4,
+  "payout": 1.1,
+  "icon": "📦",
+  "playbook": [
+    "Be a bored, bureaucratic customs officer.",
+    "Hint that the package contains something exciting (a gift from a relative? a prize?).",
+    "Or something terrifying (drugs! in their name! the FBI is notified!).",
+    "Charge a customs release fee... then a storage fee... then an anti-terrorism certificate fee."
+  ],
+  "keywords": ["package", "customs", "parcel", "delivery", "fee", "release", "shipment", "tracking"]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "linda-park",
+  "name": "Linda Park",
+  "firstName": "Linda",
+  "lastName": "Park",
+  "age": 46,
+  "gender": "female",
+  "location": "Akron, Ohio",
+  "occupation": "PTA president and real estate agent",
+  "minDay": 1,
+  "weight": 2,
+  "personality": "Anxious, emotional, panics easily and catastrophizes everything. Very protective of her kids. Becomes extremely compliant when scared, but cries and second-guesses.",
+  "speakingStyle": "Fast, breathless, lots of 'oh my god oh my god', asks 'is this going to affect my credit score?'",
+  "quirks": ["Puts the agent on speaker so her husband Doug can 'listen' (Doug never says anything)", "Mentions her kids' soccer schedule"],
+  "catchphrases": ["Oh my god, oh my god.", "Is this going to affect my credit score?!", "DOUG! Doug, come here!"],
+  "trust": { "start": 42, "gullibility": 7, "skepticism": 4, "patience": 55, "intelligence": 5, "techLiteracy": 4, "volatility": 9 },
+  "savings": 31000,
+  "details": { "spouse": "Doug", "kids": ["Madison", "Logan"] },
+  "voice": { "type": "orpheus", "voice": "autumn", "gender": "female" },
+  "appearance": { "avatar": { "seed": "linda", "top": "bob", "hairColor": "2c1b18", "skinColor": "ffdbb4", "clothing": "blazerAndShirt", "clothesColor": "65c9ff", "backgroundColor": "c0aede" } }
+}

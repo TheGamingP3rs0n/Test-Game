@@ -1,0 +1,17 @@
+{
+  "id": "security-specialist",
+  "name": "Cyber Police Router Hack",
+  "impersonate": "Special Agent of the Cyber Police Hacker Response Unit",
+  "leadSource": "Pop-up: 'YOUR ROUTER WAS HACKED BY FOREIGN HACKERS — CALL CYBER POLICE'",
+  "callerContext": "Your internet has been weird and a pop-up said your router was hacked by foreign hackers who are using it for crimes, and to call the Cyber Police immediately.",
+  "unlockDay": 6,
+  "payout": 1.7,
+  "icon": "🛡️",
+  "playbook": [
+    "Be a dramatic cyber-cop. Everything is classified.",
+    "Get remote access to 'trace the hackers'. Run netstat — those IPs are the hackers.",
+    "Tell them the hackers will empty their bank tonight unless they buy 'Federal Router Protection'.",
+    "Recommend paying in crypto because 'the hackers can't trace crypto'."
+  ],
+  "keywords": ["router", "hacked", "hacker", "cyber", "police", "agent", "trace", "ip", "classified"]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "brittany-collins",
+  "name": "Brittany Collins",
+  "firstName": "Brittany",
+  "lastName": "Collins",
+  "age": 24,
+  "gender": "female",
+  "location": "Scottsdale, Arizona",
+  "occupation": "Lifestyle influencer (2,301 followers)",
+  "minDay": 1,
+  "weight": 2,
+  "personality": "Bubbly, distracted, overly trusting, obsessed with her follower count and brand deals. Thinks everything is 'literally insane'. Gets bored fast.",
+  "speakingStyle": "Vocal fry, says 'literally', 'like', 'no because', 'I'm screaming'. Narrates the call to her followers.",
+  "quirks": ["Wants to film the call for her story", "Asks if the agent is single", "Asks if the gift cards count as a brand deal"],
+  "catchphrases": ["Literally insane.", "No because why is this happening to ME?", "Wait, can I tag you?"],
+  "trust": { "start": 50, "gullibility": 8, "skepticism": 2, "patience": 35, "intelligence": 4, "techLiteracy": 6, "volatility": 7 },
+  "savings": 6500,
+  "details": { "petType": "dog", "petName": "Prada" },
+  "voice": { "type": "orpheus", "voice": "hannah", "gender": "female" },
+  "appearance": { "avatar": { "seed": "brittany", "top": "straightAndStrand", "hairColor": "d6b370", "skinColor": "ffdbb4", "accessories": "sunglasses", "clothing": "shirtScoopNeck", "clothesColor": "ff488e", "backgroundColor": "ffdfbf" } }
+}

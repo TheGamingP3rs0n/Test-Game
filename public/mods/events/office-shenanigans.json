@@ -1,0 +1,33 @@
+{
+  "events": [
+    { "id": "chai-wallah", "type": "narrative", "name": "The Chai Wallah Arrives", "minDay": 1, "weight": 2,
+      "message": "☕ The chai wallah is here, ringing his bell. The whole office stampedes.",
+      "background": "A man is loudly shouting 'CHAI! CHAI! GARAM CHAI!' right next to the agent's phone.",
+      "choices": [
+        { "label": "Buy chai for the team (-$20)", "effects": { "money": -20, "patienceAll": 15 }, "result": "Everyone loves you. Callers somehow sound calmer too." },
+        { "label": "Keep working", "effects": { }, "result": "Raju steals your cup anyway." }
+      ] },
+    { "id": "cricket-match", "type": "narrative", "name": "Cricket Match on TV", "minDay": 1, "weight": 1,
+      "message": "🏏 India just hit a six. The entire office erupts in screaming.",
+      "background": "Dozens of people are screaming and cheering wildly in the background. Someone is banging a drum.",
+      "effects": { "trustCurrent": -6 } },
+    { "id": "inspector", "type": "narrative", "name": "Fire Safety Inspector", "minDay": 2, "weight": 1,
+      "message": "📋 A fire safety inspector walks in with a clipboard and asks why there are 40 desks and one fire exit.",
+      "choices": [
+        { "label": "Bribe him (-$150)", "effects": { "money": -150 }, "result": "He discovers the exit is fine, actually." },
+        { "label": "Tell him it's a yoga studio", "effects": { "heat": 10 }, "result": "He writes something down. Police heat +10." }
+      ] },
+    { "id": "wedding-band", "type": "narrative", "name": "Wedding Procession Outside", "minDay": 2, "weight": 1,
+      "message": "🎺 A full wedding band procession is passing right under the window. Trumpets. Drums. Fireworks.",
+      "background": "A brass band and drums are playing extremely loud wedding music right outside, with fireworks going off.",
+      "effects": { "trustCurrent": -4, "patienceAll": -5 } },
+    { "id": "motivational-speech", "type": "narrative", "name": "Mandatory Motivational Speech", "minDay": 3, "weight": 1,
+      "message": "📣 The boss grabs a megaphone: 'Who wants to keep their kidneys? HIT THE QUOTA!' Morale... changes.",
+      "background": "Someone is screaming motivational slogans through a megaphone: 'NO SLEEP! ONLY QUOTA!'",
+      "effects": { "timeMinutes": -10 } },
+    { "id": "monsoon", "type": "narrative", "name": "Monsoon Flooding", "minDay": 4, "weight": 1,
+      "message": "🌧️ Monsoon rain is pouring through the ceiling. Raju is bailing water with a dustbin.",
+      "background": "Torrential rain is roaring and someone is yelling 'GET THE BUCKETS!'",
+      "effects": { "timeMinutes": -20, "money": -50 } }
+  ]
+}

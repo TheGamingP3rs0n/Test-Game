@@ -1,0 +1,17 @@
+{
+  "id": "bank-fraud",
+  "name": "Bank Fraud Department",
+  "impersonate": "the caller's own bank's Fraud Prevention Department",
+  "leadSource": "Text message: 'ALERT: Suspicious $1,299 purchase on your card. Call Fraud Dept.'",
+  "callerContext": "You got a text claiming to be from your bank saying there was a suspicious $1,299 purchase on your card at an electronics store, and to call the fraud department at this number.",
+  "unlockDay": 3,
+  "payout": 1.4,
+  "icon": "🏦",
+  "playbook": [
+    "Answer as their bank's Fraud Department (use their bank's name if you know it!).",
+    "Verify them by 'confirming' details — card last 4 digits, address — which makes YOU look legit.",
+    "Tell them their account is compromised by an insider at the branch.",
+    "Have them move money to a 'safe account' (yours) via transfer, wire, or crypto ATM."
+  ],
+  "keywords": ["fraud", "bank", "card", "suspicious", "purchase", "safe account", "transfer", "compromised"]
+}

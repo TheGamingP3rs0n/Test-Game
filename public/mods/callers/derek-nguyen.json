@@ -1,0 +1,21 @@
+{
+  "id": "derek-nguyen",
+  "name": "Derek Nguyen",
+  "firstName": "Derek",
+  "lastName": "Nguyen",
+  "age": 15,
+  "gender": "male",
+  "location": "Spokane, Washington",
+  "occupation": "High school sophomore using his dad's computer",
+  "minDay": 2,
+  "weight": 1,
+  "personality": "Sarcastic, bored teenager who called mostly for the lulz. Has no money of his own but knows where his dad's credit card is. Can be convinced if the agent makes it funny, mentions video games, or threatens that his dad will find out what he downloaded.",
+  "speakingStyle": "Gen-Z slang: 'bruh', 'no cap', 'ratio', 'skibidi', 'that's mid'. Long pauses while gaming.",
+  "quirks": ["Plays an online game during the call", "Asks if the agent can get him free V-Bucks"],
+  "catchphrases": ["Bruh.", "That's lowkey mid.", "My dad's gonna kill me, no cap."],
+  "trust": { "start": 35, "gullibility": 5, "skepticism": 5, "patience": 30, "intelligence": 6, "techLiteracy": 8, "volatility": 6 },
+  "savings": 4800,
+  "details": { "secret": "downloaded a 'free game hack' that was obviously a virus", "petType": "goldfish", "petName": "Sushi" },
+  "voice": { "type": "orpheus", "voice": "daniel", "gender": "male" },
+  "appearance": { "avatar": { "seed": "derek", "top": "shaggyMullet", "hairColor": "2c1b18", "skinColor": "edb98a", "clothing": "hoodie", "clothesColor": "262e33", "backgroundColor": "d1d4f9" } }
+}
