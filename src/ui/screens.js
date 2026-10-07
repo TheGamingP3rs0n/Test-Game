@@ -208,17 +208,36 @@ export class Screens {
 
   gameOver(run, report) {
     const g = this.game;
-    this.show(el('div.screen',
-      el('div.panel.gameover',
-        el('div.big', "YOU'RE FIRED"),
-        el('p', `Mr. Chatterjee has personally escorted you out, along with your chair.`),
-        el('h3', 'Your career'),
-        el('p', `Survived ${run.day} day${run.day > 1 ? 's' : ''} • Total scammed ${money(run.totalEarned)} • Final cut ${money(run.wallet)}`),
-        el('div', (run.history || []).map((h) => el('div.muted', `Day ${h.day}: ${money(h.earned)} / ${money(h.quota)} — ${h.verdict}`))),
+    const total = Math.round(run.totalEarned || 0);
+    const days = Math.max(1, run.day || 1);
+    const avg = Math.round(total / days);
+    // rank the player against the rest of the call floor (AI coworkers)
+    const coworkers = [
+      { name: 'Ahmed', mult: 1.35 }, { name: 'JakeHub', mult: 1.12 }, { name: 'Hypercat', mult: 0.92 },
+      { name: 'Priya "Jennifer"', mult: 0.8 }, { name: 'Raju "Kevin"', mult: 0.66 }, { name: 'Vikram "Brad"', mult: 0.4 },
+    ];
+    const seed = total + days * 97;
+    const board = [
+      { name: `${g.run?.alias ? g.run.alias.replace(/"/g, '') : 'You'} (You)`, earned: total, you: true },
+      ...coworkers.map((c, i) => ({ name: c.name, earned: Math.max(200, Math.round((total || 1200) * c.mult * (0.9 + ((seed * (i + 3)) % 20) / 100) / 50) * 50) })),
+    ].sort((a, b) => b.earned - a.earned);
+    const leader = board[0].earned;
+    this.show(el('div.screen.fired-screen',
+      el('div.panel.termination',
+        el('div.term-head',
+          el('div', el('div.term-sub', 'KOLKATA TERMINATION REPORT'), el('div.term-big', "YOU'RE FIRED"), el('p.muted', { style: { margin: '6px 0 0' } }, 'Your complete employment record, ranked against the rest of the call floor.')),
+          el('div.term-haul', el('div.term-days', `${days} DAY${days > 1 ? 'S' : ''}`), el('div.muted', 'DAYS WORKED'), el('div.term-total', money(total)), el('div.muted', 'TOTAL SCAMMED'))),
+        el('div.term-cols', el('span', 'RANK'), el('span', { style: { flex: 1 } }, 'FORMER EMPLOYEE'), el('span', 'TOTAL EARNED'), el('span', 'AVG / DAY')),
+        el('div.term-rows', ...board.map((b, i) => el(`div.term-row${b.you ? '.you' : ''}${i === 0 ? '.first' : ''}`,
+          el('div.term-rank', `#${i + 1}`),
+          el('div.term-emp', el('b', b.name), el('div.term-note', i === 0 ? 'TOP EARNER' : `${money(leader - b.earned)} behind the leader`), el('div.term-bar', el('div', { style: { width: `${Math.round((b.earned / leader) * 100)}%` } }))),
+          el('div.term-earned', money(b.earned)),
+          el('div.term-avg', money(Math.round(b.earned / days)))))),
         el('div.row', { style: { justifyContent: 'center', marginTop: '16px' } },
           el('button.btn.ghost', { onclick: () => g.quitToMenu() }, 'Main menu'),
           el('button.btn.big.primary', { onclick: () => g.newRun() }, 'New run')))));
     void report;
+    void avg;
   }
 
   credits() {

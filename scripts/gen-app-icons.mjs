@@ -39,6 +39,8 @@ const MAP = {
   giftcards: ['fluent', 'gift-card-24'],
   creditcard: ['flat', 'money-transfer'],
   identity: ['fluent', 'contact-card-48'],
+  scamazon: ['flat', 'shop'],
+  disscord: ['fluent', 'bot-24'],
 };
 
 const out = {};

@@ -16,7 +16,7 @@ import {
   SquareTerminal, StickyNote, Scale, PersonStanding, Music, Bug, Cat, Fish, Turtle, Receipt, Heart, PawPrint, Palmtree, GraduationCap,
   Smartphone, ChartBar, FireExtinguisher, Speech, Contact, Coffee, Gem, Siren, Bitcoin, CreditCard, Wallet, Bell, Info, CircleX, Gauge,
   Fingerprint, IdCard, Minus, Maximize2, LayoutGrid, Laptop, Cpu, DollarSign, HandCoins, Waves, Truck, Sparkles, Ghost, Keyboard, Joystick, ArrowRight, Milk, Database,
-  CloudRain, Bomb, Stamp, Sticker, Clock5, BellRing, Radio, Antenna, Crown, Swords, Activity, Webcam, ScreenShare, Inbox, Ticket, Tag,
+  CloudRain, Bomb, Stamp, Sticker, Clock5, BellRing, Radio, Antenna, Crown, Swords, Activity, Webcam, ScreenShare, Inbox, Ticket, Tag, Cookie,
 } from 'lucide';
 import { el, setTextRenderers } from '../core/util.js';
 
@@ -41,7 +41,7 @@ const ICONS = {
   gauge: Gauge, fingerprint: Fingerprint, id: IdCard, laptop: Laptop, cpu: Cpu, dollar: DollarSign, payout: HandCoins, flood: Waves, truck: Truck,
   sparkles: Sparkles, ghost: Ghost, keyboard: Keyboard, joystick: Joystick, arrow: ArrowRight, cow: Milk, database: Database, rain: CloudRain, bomb: Bomb,
   stamp: Stamp, sticker: Sticker, clock5: Clock5, ring: BellRing, radio: Radio, antenna: Antenna, crown: Crown, swords: Swords, activity: Activity,
-  webcam: Webcam, screen: ScreenShare, inbox: Inbox, ticket: Ticket, tag: Tag, minus: Minus, maximize: Maximize2, grid: LayoutGrid,
+  webcam: Webcam, screen: ScreenShare, inbox: Inbox, ticket: Ticket, tag: Tag, cookie: Cookie, minus: Minus, maximize: Maximize2, grid: LayoutGrid,
 };
 
 /** Every emoji the game (or its mods) used, mapped to an icon. Unmapped emoji are dropped. */
@@ -66,7 +66,7 @@ const EMOJI = {
   '🤳': 'selfie', '🧯': 'extinguisher', '🐄': 'cow', '🗣': 'speech', '📇': 'contact', '☕': 'chai', '🐘': 'gem', '🧑‍🎤': 'mic', '👀': 'eye',
   '🚨': 'siren', '🚓': 'police', '🌧': 'rain', '🌊': 'flood', '💣': 'bomb', '✈': 'rocket', '🏏': 'trophy', '🍵': 'chai', '🐮': 'cow',
   '📱': 'selfie', '💳': 'card', '🏧': 'bank', '⭐': 'star', '❤': 'heart', '🔔': 'bell', '⏰': 'clock', '🕹': 'joystick', '⌨': 'keyboard',
-  '🆔': 'id', '🧧': 'gift', '🎫': 'ticket', '🏷': 'tag', '🔥‍': 'flame', '😀': 'smile', '😃': 'smile', '😄': 'laugh', '😅': 'laugh', '🤣': 'laugh',
+  '🆔': 'id', '🧧': 'gift', '🎫': 'ticket', '🏷': 'tag', '🍪': 'cookie', '🔥‍': 'flame', '😀': 'smile', '😃': 'smile', '😄': 'laugh', '😅': 'laugh', '🤣': 'laugh',
   '😭': 'frown', '😬': 'meh', '🤔': 'help', '😏': 'smile', '🙄': 'annoyed', '😩': 'frown', '😴': 'moon', '🥳': 'party', '👍': 'check', '👎': 'x',
 };
 

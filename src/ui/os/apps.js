@@ -10,6 +10,7 @@ import { remoteApp } from './remoteApp.js';
 import { browserApp } from './browserApp.js';
 import { paintApp, cameraApp, recorderApp, docforgeApp, siteforgeApp } from './creativeApps.js';
 import { scamApp } from './scamApps.js';
+import { scamazonApp, meteorCookieApp, disscordApp } from './extraApps.js';
 
 /** Persist a file in the run (paintings, photos, clips, documents). */
 export function saveFile(game, file) {
@@ -50,6 +51,9 @@ export function buildApps(ctx) {
     camera: { name: 'Camera', icon: '📷', width: 560, height: 520, render: (win) => cameraApp(game, win), onClose: (win) => win.cleanup?.() },
     docforge: { name: 'DocForge', icon: '📄', width: 820, height: 600, render: (win) => docforgeApp(game, win) },
     siteforge: { name: 'SiteForge', icon: '🕸️', width: 820, height: 600, render: (win) => siteforgeApp(game, win) },
+    scamazon: { name: 'Scamazon', icon: '🛒', width: 680, height: 540, render: (win) => scamazonApp(game, win) },
+    meteorcookie: { name: 'Meteor Cookie', icon: '🍪', width: 420, height: 520, render: (win) => meteorCookieApp(game, win) },
+    disscord: { name: 'Disscord', icon: '💬', width: 560, height: 480, render: (win) => disscordApp(game, win) },
   };
 }
 
