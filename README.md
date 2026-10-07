@@ -46,6 +46,22 @@ localStorage and only sent to `api.groq.com`.
 *If voices fail with a "terms" error, open the Groq console playground, pick the Orpheus model
 once and accept its terms.*
 
+## Local co-op (LAN multiplayer)
+
+Play together on the same Wi-Fi. One person **hosts**, everyone else **joins**.
+
+**Host:** run `npm run host` (or double-click *Host Multiplayer*). It serves the game on
+your network and starts the co-op server, then prints your address, e.g. `192.168.1.5`.
+Open the game it points to, choose **Multiplayer → Host → Connect**.
+
+**Join:** open the host's game link in your browser, choose **Multiplayer → Join**, enter
+your name and the host's address (e.g. `192.168.1.5`), and connect.
+
+In the lobby everyone picks a name (shown on a floating nametag above their character).
+Anyone can **Start shift**. Your scams pool into a shared **team quota**; when it's met,
+hit **Clock Out** to call a vote — once enough of the team agrees, everyone advances to the
+next (harder) day.
+
 ## How to play
 
 | Key | Action |

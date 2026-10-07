@@ -117,19 +117,26 @@ export class HUD {
     const g = this.game;
     if (!g.day || this.node.style.display === 'none') return;
     this.clock.textContent = clockText(g.clock);
-    this.dayLabel.textContent = `DAY ${g.day.day}`;
-    const pct = Math.min(1, Math.max(0, g.day.earned) / g.day.quota);
+    // co-op shows the shared TEAM total/quota; solo shows yours
+    const earned = g.mp ? g.mpTeam.earned : Math.max(0, g.day.earned);
+    const quota = g.mp ? g.mpTeam.quota : g.day.quota;
+    this.dayLabel.textContent = g.mp ? `DAY ${g.mpTeam.day} · TEAM` : `DAY ${g.day.day}`;
+    const pct = Math.min(1, earned / Math.max(1, quota));
     this.quotaBar.style.width = `${pct * 100}%`;
     this.status.classList.toggle('done', pct >= 1);
-    this.quotaEarned.textContent = money(Math.max(0, g.day.earned));
-    this.quotaGoal.textContent = `/ ${money(g.day.quota)}`;
+    this.quotaEarned.textContent = money(earned);
+    this.quotaGoal.textContent = `/ ${money(quota)}`;
     const pend = g.pendingTotal();
     this.pending.textContent = pend ? `+${money(pend)} waiting in Cashier` : '';
     this.strikeDots.forEach((d, i) => d.classList.toggle('on', i < (g.run?.strikes || 0)));
     this.heatBar.style.width = `${g.run?.heat || 0}%`;
     this.wallet.textContent = money(g.run?.wallet || 0);
     // Clock Out appears once quota is met; it hides again if earnings drop back below.
-    const canClockOut = g.phase === 'playing' && !g.computerOpen && g.day.earned >= g.day.quota && g.clock < g.dayEnd;
+    const earnedNow = g.mp ? g.mpTeam.earned : g.day.earned;
+    const quotaNow = g.mp ? g.mpTeam.quota : g.day.quota;
+    const canClockOut = g.phase === 'playing' && !g.computerOpen && earnedNow >= quotaNow;
     this.clockOut.style.display = canClockOut ? '' : 'none';
+    if (canClockOut) this.clockOut.lastChild.textContent = g.mp ? 'Quota met — vote to clock out' : 'Quota met — end the day';
+    this.clockOut.firstChild && (this.clockOut.querySelector('span').textContent = g.mp ? 'Vote: Clock Out' : 'Clock Out');
   }
 }

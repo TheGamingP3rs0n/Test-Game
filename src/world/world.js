@@ -7,6 +7,8 @@ import { Player } from './player.js';
 import { FX } from './fx.js';
 import { LightingRig } from './lighting.js';
 import { RenderPipeline, QUALITY } from './render.js';
+import { RemotePlayers } from './remotePlayers.js';
+import { net } from '../net/net.js';
 import { settings } from '../core/store.js';
 import { bus } from '../core/bus.js';
 
@@ -45,6 +47,7 @@ class World {
     this.office = new Office(this.scene, { renderer: this.renderer, rig: this.rig, quality: this.quality });
     await this.office.build((p) => onProgress(p * 0.75, `Loading the office… ${Math.round(p * 100)}%`));
     this.fx = new FX(this.scene, this.camera);
+    this.remotePlayers = new RemotePlayers(this.scene);
     this.player = new Player(this.camera, canvas, this.office);
     this.player.sitAtDesk();
     this.menuAngle = 0;
@@ -170,6 +173,8 @@ class World {
     this.office.update(simDt);
     this.rig.update(simDt);
     this.fx.update(simDt);
+    this.remotePlayers.update(dt);
+    if (net.active) net.move(this.player.pos, this.player.yaw, this.player.mode);
 
     if (this.mode === 'menu') {
       this.updateMenuCamera(dt);

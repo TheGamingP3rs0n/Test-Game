@@ -21,6 +21,7 @@ import { initDialogs, toast } from './ui/dialog.js';
 import { openSettings } from './ui/settings.js';
 import { openClientMaker } from './ui/clientMaker.js';
 import { openMods } from './ui/mods.js';
+import { openMultiplayer, initCoop } from './ui/multiplayer.js';
 import { showReview } from './ui/review.js';
 import { showShop } from './ui/shop.js';
 import { bindChatStore } from './ui/os/apps.js';
@@ -68,11 +69,14 @@ async function boot() {
       onSettings: () => openSettings({ onClose: () => game.phase === 'menu' && showMenu() }),
       onClients: openMaker,
       onMods: () => openMods({ onClose: () => game.phase === 'menu' && showMenu() }),
+      onMultiplayer: () => openMultiplayer(screens, game, { onClose: () => game.phase === 'menu' && showMenu() }),
     });
   };
+  initCoop(game);
 
   game.ui = {
     showMenu,
+    hideScreens: () => screens.hide(),
     showBriefing: (run, day) => {
       computer.newDay();
       screens.briefing(run, day);

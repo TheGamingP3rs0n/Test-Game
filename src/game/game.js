@@ -13,6 +13,7 @@ import { music } from '../core/music.js';
 import { money, clamp, pick } from '../core/util.js';
 import { scriptedMessage } from '../ai/coworkers.js';
 import { speaker } from '../ai/speech.js';
+import { net } from '../net/net.js';
 
 export const DAY_START = 9 * 60;
 const DAY_END = 17 * 60;
@@ -26,6 +27,8 @@ export const game = {
   dayStart: DAY_START,
   dayEnd: DAY_END,
   paused: false,
+  mp: false, // co-op mode
+  mpTeam: { earned: 0, quota: 1500, day: 1 },
   computerOpen: false,
   micBroken: false,
   powerOut: false,
@@ -132,7 +135,11 @@ export const game = {
       this.chat('idle', 0.7);
     }
     world.office.setClock(this.clock);
-    if (this.clock >= this.dayEnd) this.endDay();
+    // co-op: the clock loops around the shift; the team ends the day by vote, not the bell
+    if (this.clock >= this.dayEnd) {
+      if (this.mp) this.clock = this.dayStart + (this.clock - this.dayEnd);
+      else this.endDay();
+    }
   },
 
   ringNext() {
@@ -163,6 +170,7 @@ export const game = {
     if (!allowNegative) this.day.earned = Math.max(0, this.day.earned);
     if (amount > 0) {
       sfx('cash');
+      if (this.mp && this.phase === 'playing') net.earn(amount);
       bus.emit('money:popup', { amount });
       bus.emit('toast', { kind: 'money', icon: 'money', text: `+${money(amount)}${label ? ` — ${label}` : ''}` });
     } else if (amount < 0) {
@@ -300,7 +308,14 @@ export const game = {
 
   /** Player-initiated early end of day (the Clock Out button; only when quota is met). */
   clockOut() {
-    if (this.phase !== 'playing' || !this.day || this.day.earned < this.day.quota) return;
+    if (this.phase !== 'playing' || !this.day) return;
+    if (this.mp) {
+      if (this.mpTeam.earned < this.mpTeam.quota) return;
+      net.voteClockOut();
+      bus.emit('toast', { kind: 'info', icon: 'door', title: 'Clock-out vote', text: 'You voted to clock out. Waiting for the team…' });
+      return;
+    }
+    if (this.day.earned < this.day.quota) return;
     if (this.calls.state === 'ringing') this.calls.decline();
     sfx('win');
     this.addHighlight('Clocked out early with quota in the bag.');
@@ -341,6 +356,44 @@ export const game = {
     this.ui.showHUD?.(false);
     world.setMode('menu');
     this.ui.showMenu?.();
+  },
+
+  // ------------------------------------------------------------------ co-op
+  /** Start (or advance to) a co-op shift with the team's shared quota. */
+  beginCoopDay(day, quota) {
+    this.mp = true;
+    if (!this.run) this.run = newRun();
+    this.run.day = day;
+    this.mpTeam = { earned: this.mpTeam?.earned || 0, quota, day };
+    this.phase = 'playing';
+    this.paused = false;
+    this.day = newDayState(this.run);
+    this.day.day = day;
+    this.day.quota = quota;
+    this.dayStart = DAY_START;
+    this.dayEnd = DAY_END;
+    this.clock = DAY_START;
+    this.dayFlags = {};
+    this.resetHazards();
+    this.ui.hidePause?.();
+    this.ui.hideScreens?.();
+    this.closeComputer();
+    world.office.setShame((this.run.shame || []).slice(-5));
+    world.player.sitAtDesk();
+    world.setMode('play');
+    world.player.requestLock();
+    this.chaos.planDay(this.day.day, this.dayStart, this.dayEnd);
+    this.nextCallIn = 4;
+    startLoop('officeAmbience', 'amb');
+    music.play('shift');
+    this.ui.showHUD?.(true);
+  },
+
+  leaveCoop() {
+    this.mp = false;
+    this.mpTeam = { earned: 0, quota: 1500, day: 1 };
+    net.disconnect();
+    this.quitToMenu();
   },
 
   // ------------------------------------------------------------------ practice

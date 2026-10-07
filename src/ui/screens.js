@@ -49,7 +49,7 @@ export class Screens {
     };
   }
 
-  menu({ onSettings, onClients, onMods }) {
+  menu({ onSettings, onClients, onMods, onMultiplayer }) {
     const g = this.game;
     const hasSave = g.hasSave();
     const btn = (label, ic, onclick, cls = '', extra = null) => el(`button.btn.big.menu-btn${cls}`, { onclick: () => (unlockAudio(), sfx('click'), onclick()), onmouseenter: () => sfx('hover') }, el('span.lbl', icon(ic), label), extra);
@@ -60,7 +60,7 @@ export class Screens {
         el('div.buttons',
           hasSave ? btn('Continue run', 'play', () => g.continueRun(), '.primary') : null,
           btn(hasSave ? 'New run' : 'Start shift', 'phone', () => g.newRun(), hasSave ? '' : '.primary'),
-          el('button.btn.big.menu-btn', { disabled: true, title: 'Online co-op is coming soon!' }, el('span.lbl', icon('users'), 'Multiplayer'), el('span.badge.yellow', 'Coming soon')),
+          btn('Multiplayer', 'users', onMultiplayer, '', el('span.badge.green', 'LAN')),
           btn('Custom Clients', 'contact', onClients),
           btn('Mods', 'puzzle', onMods),
           btn('Settings', 'settings', onSettings),
