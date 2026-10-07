@@ -248,21 +248,17 @@ export class Screens {
   }
 
   credits() {
-    modal(el('div',
-      el('h2', 'Credits'),
-      el('p', 'A single-player parody inspired by the co-op game "Scam With Your Friends". All assets here are original or openly licensed.'),
-      el('h3', '3D models'),
-      el('p', 'Kenney (kenney.nl) — Furniture Kit, Mini Characters, Car Kit, Cube Pets, Food Kit. CC0 / public domain.'),
-      el('h3', 'Portraits'),
-      el('p', 'Avataaars by Pablo Stanley, via DiceBear (free for personal & commercial use).'),
-      el('h3', 'Icons'),
-      el('p', 'Lucide (ISC). App icons: Fluent UI System Color Icons by Microsoft (MIT) and Flat Color Icons by Icons8 (MIT), via Iconify.'),
-      el('h3', 'Fonts'),
-      el('p', 'Bungee, Inter, VT323, Permanent Marker — SIL Open Font License, via Fontsource.'),
-      el('h3', 'AI'),
-      el('p', 'Groq: openai/gpt-oss-20b (callers, boss, coworkers), canopylabs/orpheus-v1-english (voices), whisper-large-v3 (speech to text).'),
-      el('h3', 'Engine'),
-      el('p', 'three.js + Vite. Sound effects and music are synthesized live in WebAudio.'),
-    ));
+    const sec = (ic, title, lines) => el('div.cred-sec', el('div.cred-h', icon(ic), title), ...lines.map((l) => el('div.cred-line', l)));
+    modal(el('div.credits',
+      el('div.cred-top', this.logo(0.5)),
+      el('p.muted', { style: { textAlign: 'center', marginTop: '-6px' } }, 'A single-player + LAN co-op parody inspired by "Scam With Your Friends". Everything here is original or openly licensed.'),
+      el('div.cred-grid',
+        sec('bot', 'AI (Groq)', ['openai/gpt-oss — callers, boss & coworkers', 'canopylabs/orpheus — voices', 'whisper-large-v3 — your microphone']),
+        sec('gamepad', 'Engine', ['three.js + Vite (MIT)', 'Sound effects & music synthesized live in WebAudio', 'ws — LAN co-op server']),
+        sec('user', '3D models', ['Kenney (kenney.nl) — Furniture, Mini Characters,', 'Car, Cube Pets & Food kits. CC0 / public domain.']),
+        sec('image', 'Icons', ['Lucide (ISC)', 'Fluent UI System Color Icons — Microsoft (MIT)', 'Flat Color Icons — Icons8 (MIT)']),
+        sec('contact', 'Portraits', ['Avataaars by Pablo Stanley,', 'via DiceBear (free for any use)']),
+        sec('type', 'Fonts', ['Bungee, Inter, VT323, Permanent Marker', 'SIL Open Font License, via Fontsource'])),
+      el('p.cred-foot', VERSION, ' · A parody. All callers, companies and money are fictional.')), { className: 'credits-modal' });
   }
 }

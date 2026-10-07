@@ -42,8 +42,10 @@ export function toast(text, kind = 'info', ms = 4200, { icon: ic, title } = {}) 
 
 /** Generic modal. content: Node. Returns { close, node }. */
 export function modal(content, { onClose, closable = true, className = '' } = {}) {
-  const panel = el(`div.panel.modal${className ? '.' + className : ''}`, content);
+  const closeBtn = closable ? el('button.modal-close', { title: 'Close (Esc)', 'aria-label': 'Close' }, icon('x')) : null;
+  const panel = el(`div.panel.modal${className ? '.' + className : ''}`, closeBtn, content);
   const back = el('div.modal-back', panel);
+  if (closeBtn) closeBtn.addEventListener('click', () => close());
   const onKey = (e) => {
     // Esc closes the top-most modal only (and doesn't also resume/pause the game)
     if (e.code !== 'Escape' || back !== [...document.querySelectorAll('.modal-back')].pop()) return;
