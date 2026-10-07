@@ -72,7 +72,6 @@ export class Screens {
   briefing(run, day) {
     const g = this.game;
     const intro = DAY_INTROS[Math.min(day.day - 1, DAY_INTROS.length - 1)];
-    const newApps = APPS.filter((a) => a.day === day.day && day.day > 1);
     const newScams = content.scenarios.filter((s) => (s.unlockDay || 1) === day.day);
     const newEvents = content.events.filter((e) => (e.minDay || 1) === day.day && e.type !== 'narrative');
     this.show(el('div.screen',
@@ -82,9 +81,8 @@ export class Screens {
         el('div.quota-big', `QUOTA: ${money(day.quota)}`),
         el('p', intro),
         run.strikes ? el('p', { style: { color: 'var(--red)', fontWeight: 800 } }, `⚠️ You have ${run.strikes} strike${run.strikes > 1 ? 's' : ''}. Three strikes and you're fired.`) : null,
-        newApps.length || newScams.length || newEvents.length ? el('div.unlocks',
+        newScams.length || newEvents.length ? el('div.unlocks',
           ...newScams.map((s) => el('div.unlock', `${s.icon || '📞'} New scam: ${s.name}`)),
-          ...newApps.map((a) => el('div.unlock', `${a.icon} New app: ${a.name}`)),
           ...newEvents.map((e) => el('div.unlock', { style: { borderColor: 'rgba(255,77,77,.4)' } }, `⚠️ New hazard: ${e.name}`))) : null,
         day.day === 1 ? el('div.controls',
           el('div', '🎧 Calls ring at your desk. Press ', el('span.kbd', 'F'), ' to answer. Hold ', el('span.kbd', (settings.pttKey || 'KeyV').replace('Key', '')), ' and speak (or type and press Enter).'),

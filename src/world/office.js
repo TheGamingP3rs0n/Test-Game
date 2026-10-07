@@ -109,7 +109,7 @@ export class Office {
 
     const ceilTex = dropCeilingTexture([w / 2.4, d / 2.4]);
     // a little self-illumination stands in for light bouncing off the desks onto the tiles
-    this.ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex, emissiveMap: ceilTex, emissive: 0x3a352c, roughness: 0.95, envMapIntensity: 0.3 });
+    this.ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex, emissiveMap: ceilTex, emissive: 0x241f18, roughness: 0.95, envMapIntensity: 0.25 });
     const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), this.ceilMat);
     ceil.rotation.x = Math.PI / 2;
     ceil.position.y = ROOM.height;
@@ -284,7 +284,7 @@ export class Office {
 
   buildLights() {
     // fixture housings + glowing diffusers; the actual light comes from RectAreaLights
-    this.diffuserMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3dc, emissiveIntensity: 1.6, roughness: 0.4 });
+    this.diffuserMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3dc, emissiveIntensity: 1.15, roughness: 0.4 });
     const frameMat = M.metal(0xd6d3cc, 0.35);
     const fixtures = [];
     for (const x of [-5.6, -1.6]) for (const z of [-3.0, -0.2, 2.6]) fixtures.push({ x, z, w: 2.4, d: 0.6, intensity: 3.2 });
@@ -873,7 +873,7 @@ export class Office {
   setPower(on) {
     this.powered = on;
     this.rig.setPower(on);
-    this.diffuserMat.emissiveIntensity = on ? 1.6 : 0;
+    this.diffuserMat.emissiveIntensity = on ? 1.15 : 0;
     this.ceilMat.emissiveIntensity = on ? 1 : 0.08;
     this.boardMesh.visible = on;
     for (const tex of this.coworkerScreens) tex.userData.redraw((ctx, w, h) => drawScreen(ctx, w, h, { kind: on ? 'coworker' : 'off' }));

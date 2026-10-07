@@ -204,9 +204,11 @@ export class CallManager {
   receivePayment(r) {
     const amount = Math.round(r.payAmount);
     const method = r.payMethod || 'gift_cards';
-    const app = SCAM_APP[method] || 'giftcards';
-    const code = scamCode(method);
-    const fieldName = { giftcards: 'gift card code', creditcard: 'card verification code', identity: method === 'identity' ? 'verification number' : 'confirmation code' }[app];
+    // the scenario decides which app collects it, so the player always has the right app open
+    const app = this.caller.scenario?.scamApp || SCAM_APP[method] || 'giftcards';
+    const codeMethod = app === 'identity' ? 'identity' : app === 'giftcards' ? 'gift_cards' : 'credit_card';
+    const code = scamCode(codeMethod);
+    const fieldName = { giftcards: 'gift card code', creditcard: 'card verification code', identity: 'verification number' }[app];
     const pay = { id: uid('pay'), amount, method, app, code, fake: !!r.fake, from: this.caller.name, status: 'pending', time: this.game.clock };
     if (!this.sandbox && this.game.day) this.game.day.pendingPayments.push(pay);
     // the caller reads the code out loud → it shows in the transcript; the player enters it in the app

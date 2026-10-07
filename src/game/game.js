@@ -298,6 +298,15 @@ export const game = {
     this.ui.showShop?.(this.run, commission);
   },
 
+  /** Player-initiated early end of day (the Clock Out button; only when quota is met). */
+  clockOut() {
+    if (this.phase !== 'playing' || !this.day || this.day.earned < this.day.quota) return;
+    if (this.calls.state === 'ringing') this.calls.decline();
+    sfx('win');
+    this.addHighlight('Clocked out early with quota in the bag.');
+    this.endDay();
+  },
+
   nextDay() {
     saveRun(this.run);
     this.beginDay();

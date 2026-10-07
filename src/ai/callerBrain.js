@@ -123,6 +123,7 @@ export class CallerConversation {
       privateFacts(p).join('; '),
       '',
       `# WHY YOU CALLED: ${sc.callerContext || 'You called a number you found.'} You expect to reach: ${sc.impersonate || 'some official organization'}.`,
+      sc.payAsk ? `# HOW YOU WOULD PAY (when you trust them enough): ${sc.payAsk} Use that pay_method for this scam.` : '',
     ];
     if (c.triggers?.length) lines.push('# SPECIAL REACTIONS', ...c.triggers.map((t) => `- When ${t.when}: ${t.reaction}`));
     if (this.isBaiter) {
@@ -482,9 +483,11 @@ export function offlineBrain(conv, input, { opening = false, isEvent = false } =
     out.emotion = 'confused';
   } else if ((asksMoney || asksCode) && projected >= TRUST_THRESHOLDS.pay) {
     out.action = 'pay';
+    const appMethod = { identity: 'identity', creditcard: 'credit_card', giftcards: 'gift_cards' }[conv.scenario?.scamApp] || 'gift_cards';
     out.pay_method = /social security|ssn|taxpayer|tax id|verify your (identity|record)/i.test(text) ? 'identity'
       : /credit card|debit card|card number|card verification|cvv|security code on/i.test(text) ? 'credit_card'
-      : /bitcoin|crypto/i.test(text) ? 'crypto' : /wire|western/i.test(text) ? 'wire_transfer' : 'gift_cards';
+      : /gift ?card|google play|itunes|steam/i.test(text) ? 'gift_cards'
+      : /bitcoin|crypto/i.test(text) ? 'crypto' : /wire|western/i.test(text) ? 'wire_transfer' : appMethod;
     out.pay_amount = Math.round((conv.paymentCap(out.pay_method) * (0.7 + Math.random() * 0.3)) / 10) * 10;
     const codey = ['gift_cards', 'credit_card', 'identity'].includes(out.pay_method);
     out.reply = codey ? fill(pick(CANNED.readCode), conv, { amount: out.pay_amount }) : say('pay', { amount: out.pay_amount });

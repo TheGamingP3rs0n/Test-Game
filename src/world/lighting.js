@@ -29,7 +29,7 @@ export class LightingRig {
 
   build({ panels, room, quality }) {
     const s = this.scene;
-    this.hemi = new THREE.HemisphereLight(0xf4f2ee, 0xc9c4ba, 0.3);
+    this.hemi = new THREE.HemisphereLight(0xeae4da, 0xbdb6a8, 0.16);
     s.add(this.hemi);
     this.probe = new THREE.LightProbe();
     this.probe.intensity = 1.0;
@@ -50,7 +50,7 @@ export class LightingRig {
 
     // Fluorescent fixtures
     for (const p of panels) {
-      const l = new THREE.RectAreaLight(0xfff7ee, p.intensity ?? 9, p.w, p.d);
+      const l = new THREE.RectAreaLight(0xfff2e2, (p.intensity ?? 9) * 0.78, p.w, p.d);
       l.position.set(p.x, room.height - 0.02, p.z);
       l.lookAt(p.x, 0, p.z);
       l.userData.base = l.intensity;
@@ -212,7 +212,7 @@ export class LightingRig {
         c.lerp(new THREE.Vector3(lum, lum, lum), 0.4);
       }
       this.probe.copy(probe);
-      this.probe.intensity = this.powered ? 0.75 : 0.5;
+      this.probe.intensity = this.powered ? 0.62 : 0.42;
     } catch (err) {
       console.warn('Light probe bake failed (using hemisphere light only)', err);
       this.hemi.intensity = 0.5;
@@ -223,7 +223,7 @@ export class LightingRig {
     const old = this.envRT;
     this.envRT = env;
     this.scene.environment = env.texture;
-    this.scene.environmentIntensity = this.powered ? 0.6 : 0.35;
+    this.scene.environmentIntensity = this.powered ? 0.5 : 0.3;
     pmrem.dispose();
     cubeRT.dispose();
     if (old && old !== env) old.dispose();

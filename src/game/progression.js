@@ -34,8 +34,9 @@ export const APPS = [
   { id: 'siteforge', name: 'SiteForge', icon: '🕸️', day: 4 },
 ];
 
-export function appsForDay(day) {
-  return APPS.filter((a) => a.day <= day).map((a) => a.id);
+export function appsForDay() {
+  // every app is available from day 1 (no locked apps)
+  return APPS.map((a) => a.id);
 }
 
 export const SHOP = [

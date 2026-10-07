@@ -38,14 +38,11 @@ export class Computer {
   /** Build a fresh desktop for the day (apps unlock as days progress). */
   newDay() {
     this.desktop?.closeAll();
-    const unlocked = new Set(this.game.day?.apps || APPS.map((a) => a.id));
     const apps = buildApps({ game: this.game, computer: this });
-    const locked = new Set(APPS.filter((a) => !unlocked.has(a.id)).map((a) => a.id));
     this.desktop = new Desktop({
       theme: 'player',
       apps,
       icons: APPS.map((a) => a.id),
-      locked,
       user: `${this.game.run?.alias || 'Agent "Steve"'}`,
       wallpaperText: 'GLOBAL<br>SOLUTIONS<br><span style="font-size:18px">pvt. ltd.</span>',
       onStartAction: () => this.game.closeComputer(),

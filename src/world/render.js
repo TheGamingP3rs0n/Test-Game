@@ -169,12 +169,13 @@ const GradeShader = {
   uniforms: {
     tDiffuse: { value: null },
     uTime: { value: 0 },
-    uVignette: { value: 0.38 },
-    uGrain: { value: 0.03 },
-    uWarm: { value: 0.012 },
-    uSat: { value: 1.06 },
-    uContrast: { value: 1.05 },
-    uCA: { value: 0.0022 },
+    uVignette: { value: 0.62 },
+    uGrain: { value: 0.032 },
+    uWarm: { value: 0.022 },
+    uSat: { value: 1.34 },
+    uContrast: { value: 1.22 },
+    uLift: { value: -0.03 },
+    uCA: { value: 0.0026 },
     uTint: { value: new THREE.Color(1, 0.2, 0.2) },
     uTintAmt: { value: 0 },
     uDesat: { value: 0 },
@@ -182,7 +183,7 @@ const GradeShader = {
   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
-    uniform float uTime, uVignette, uGrain, uWarm, uSat, uContrast, uCA, uTintAmt, uDesat;
+    uniform float uTime, uVignette, uGrain, uWarm, uSat, uContrast, uLift, uCA, uTintAmt, uDesat;
     uniform vec3 uTint;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -193,9 +194,12 @@ const GradeShader = {
       col.r = texture2D(tDiffuse, vUv + dir * uCA * d).r;
       col.g = texture2D(tDiffuse, vUv).g;
       col.b = texture2D(tDiffuse, vUv - dir * uCA * d).b;
-      col = (col - 0.5) * uContrast + 0.5;
+      // contrast around a slightly-below-mid pivot = darker, punchier midtones
+      col = (col - 0.46) * uContrast + 0.46 + uLift;
       float l = dot(col, vec3(0.299, 0.587, 0.114));
-      col = mix(vec3(l), col, uSat * (1.0 - uDesat));
+      // saturate more in shadows/mids than in highlights so bright screens don't blow out
+      float satAmt = uSat * (1.0 - uDesat) * (1.0 - 0.25 * smoothstep(0.6, 1.0, l));
+      col = mix(vec3(l), col, satAmt);
       col += vec3(uWarm, uWarm * 0.45, -uWarm * 0.7) * smoothstep(0.35, 1.0, l);
       col += vec3(-0.012, 0.004, 0.02) * (1.0 - smoothstep(0.0, 0.3, l));
       col = mix(col, col * uTint * 1.4 + uTint * 0.08, uTintAmt);

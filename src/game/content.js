@@ -47,9 +47,28 @@ export function normalizeCaller(raw, source = 'mod') {
   return c;
 }
 
+/** Which scam app this scenario's payout flows through (so the caller brings the problem
+ *  and reads the matching code, and the player doesn't have to guess what to collect). */
+export function scamAppForScenario(sc) {
+  if (sc.scamApp) return sc.scamApp;
+  const hay = `${sc.id} ${sc.name} ${sc.impersonate} ${(sc.keywords || []).join(' ')}`.toLowerCase();
+  if (/tax|irs|ird|government|social security|ssn|warrant|police|cyber|arrest|immigration|identity/.test(hay)) return 'identity';
+  if (/bank|fraud|refund|customs|delivery|parcel|package|shipping|billing|subscription|debit|credit card/.test(hay)) return 'creditcard';
+  return 'giftcards'; // tech support, lottery/sweepstakes, crypto on-ramp -> gift-card fees
+}
+
+const APP_ASK = {
+  giftcards: 'They pay by buying gift cards and reading you the code on the back.',
+  creditcard: 'They pay by reading you their card verification code to "process" a charge/refund.',
+  identity: 'They "verify their record" by reading you their ID / verification number.',
+};
+
 export function normalizeScenario(raw) {
   if (!raw?.id || !raw?.name) throw new Error('Scenario needs "id" and "name"');
-  return { unlockDay: 1, payout: 1, icon: '📞', playbook: [], keywords: [], impersonate: 'a company representative', leadSource: 'Unknown lead', callerContext: 'You called this number.', ...raw };
+  const sc = { unlockDay: 1, payout: 1, icon: '📞', playbook: [], keywords: [], impersonate: 'a company representative', leadSource: 'Unknown lead', callerContext: 'You called this number.', ...raw };
+  sc.scamApp = scamAppForScenario(sc);
+  sc.payAsk = APP_ASK[sc.scamApp];
+  return sc;
 }
 
 export function normalizeEvent(raw) {

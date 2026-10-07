@@ -34,7 +34,8 @@ export class HUD {
     this.lookHint = el('div.look-hint', { style: { display: 'none' } }, icon('mouse'), 'Click to look around');
     this.hiddenTag = el('div.hidden-indicator', { style: { display: 'none' } }, icon('hidden'), 'HIDDEN UNDER DESK');
     this.vignette = el('div.vignette');
-    this.node.append(this.vignette, this.status, this.practice, this.crosshair, this.prompt, this.banner, this.subtitles, this.hint, this.lookHint, this.hiddenTag);
+    this.clockOut = el('button.clock-out', { style: { display: 'none' }, onclick: () => this.game.clockOut() }, icon('door'), el('span', 'Clock Out'), el('small', 'Quota met — end the day'));
+    this.node.append(this.vignette, this.status, this.practice, this.crosshair, this.prompt, this.banner, this.subtitles, this.hint, this.lookHint, this.hiddenTag, this.clockOut);
     root.append(this.node);
     this.show(false);
     this.bind();
@@ -108,6 +109,7 @@ export class HUD {
     this.prompt.style.display = 'none';
     this.hint.style.display = on ? 'none' : '';
     this.hiddenTag.style.display = 'none';
+    if (on) this.clockOut.style.display = 'none';
     this.renderHint();
   }
 
@@ -126,5 +128,8 @@ export class HUD {
     this.strikeDots.forEach((d, i) => d.classList.toggle('on', i < (g.run?.strikes || 0)));
     this.heatBar.style.width = `${g.run?.heat || 0}%`;
     this.wallet.textContent = money(g.run?.wallet || 0);
+    // Clock Out appears once quota is met; it hides again if earnings drop back below.
+    const canClockOut = g.phase === 'playing' && !g.computerOpen && g.day.earned >= g.day.quota && g.clock < g.dayEnd;
+    this.clockOut.style.display = canClockOut ? '' : 'none';
   }
 }
