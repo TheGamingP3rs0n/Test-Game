@@ -104,7 +104,6 @@ export function openSettings({ onClose } = {}) {
       );
     } else if (tab === 'game') {
       body.replaceChildren(
-        field('Workday length', range('dayLengthMinutes', 6, 30, 1), 'Real minutes per 9-to-5 shift (default 16). Longer = a slower clock and more calls per day.'),
         field('Field of view', range('fov', 60, 100, 1), 'Vertical field of view in degrees (default 80).'),
         field('Mouse sensitivity', range('mouseSensitivity', 0.2, 3, 0.1)),
         field('Your fake name', text('agentAlias'), 'What you call yourself on the phone (just for flavor).'),

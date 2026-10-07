@@ -68,6 +68,7 @@ export function normalizeScenario(raw) {
   const sc = { unlockDay: 1, payout: 1, icon: '📞', playbook: [], keywords: [], impersonate: 'a company representative', leadSource: 'Unknown lead', callerContext: 'You called this number.', ...raw };
   sc.scamApp = scamAppForScenario(sc);
   sc.payAsk = APP_ASK[sc.scamApp];
+  sc.unlockDay = 1; // every scam is available from the start
   return sc;
 }
 

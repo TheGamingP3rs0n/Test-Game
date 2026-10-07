@@ -72,6 +72,7 @@ export class CallManager {
     const caller = this.caller;
     this.state = 'idle';
     this.caller = null;
+    this.game.nextCallIn = 3 + Math.random() * 5; // breather before the next call
     if (!this.sandbox && this.game.day) {
       this.game.day.missedCalls++;
       this.game.addHighlight(`Let ${caller.name} ring out. The boss heard.`);

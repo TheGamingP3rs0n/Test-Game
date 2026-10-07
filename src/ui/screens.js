@@ -1,13 +1,14 @@
 // Full-screen UI: loading, main menu, briefing, pause, call recap, game over, credits.
 import { el, money, clockText } from '../core/util.js';
 import { icon } from './icons.js';
-import { settings, hasApiKey, meta } from '../core/store.js';
+import { settings, hasApiKey, meta, VERSION } from '../core/store.js';
 import { unlockAudio, sfx } from '../core/audio.js';
 import { DAY_INTROS, APPS } from '../game/progression.js';
 import { content } from '../game/content.js';
 import { portraitFor } from './portraits.js';
 import { modal } from './dialog.js';
 import { bus } from '../core/bus.js';
+import { net } from '../net/net.js';
 
 export const GAME_TITLE = 'Scam Call Center';
 
@@ -66,7 +67,8 @@ export class Screens {
           btn('Settings', 'settings', onSettings),
           btn('Credits', 'scroll', () => this.credits()),
           hasApiKey() ? null : el('div.keywarn', icon('warn'), el('span', 'No Groq API key yet — callers use a simple offline brain and browser voices. Add a free key in ', el('a', { href: '#', onclick: (e) => (e.preventDefault(), onSettings()) }, 'Settings'), ' for real AI conversations.'))),
-        el('div.footer', el('span', `${content.callers.length} callers • ${content.scenarios.length} scams • ${content.events.length} events loaded${content.customClients.length ? ` • ${content.customClients.length} custom clients` : ''}`), el('span', 'A parody game. All callers, companies and money are fictional.')))));
+        el('div.footer', el('span', `${content.callers.length} callers • ${content.scenarios.length} scams • ${content.events.length} events loaded${content.customClients.length ? ` • ${content.customClients.length} custom clients` : ''}`), el('span', 'A parody game. All callers, companies and money are fictional.'))),
+      el('div.version', VERSION)));
   }
 
   briefing(run, day) {
@@ -211,16 +213,21 @@ export class Screens {
     const total = Math.round(run.totalEarned || 0);
     const days = Math.max(1, run.day || 1);
     const avg = Math.round(total / days);
-    // rank the player against the rest of the call floor (AI coworkers)
-    const coworkers = [
-      { name: 'Ahmed', mult: 1.35 }, { name: 'JakeHub', mult: 1.12 }, { name: 'Hypercat', mult: 0.92 },
-      { name: 'Priya "Jennifer"', mult: 0.8 }, { name: 'Raju "Kevin"', mult: 0.66 }, { name: 'Vikram "Brad"', mult: 0.4 },
-    ];
-    const seed = total + days * 97;
-    const board = [
-      { name: `${g.run?.alias ? g.run.alias.replace(/"/g, '') : 'You'} (You)`, earned: total, you: true },
-      ...coworkers.map((c, i) => ({ name: c.name, earned: Math.max(200, Math.round((total || 1200) * c.mult * (0.9 + ((seed * (i + 3)) % 20) / 100) / 50) * 50) })),
-    ].sort((a, b) => b.earned - a.earned);
+    // in co-op, rank the real team by what each player personally scammed
+    let board;
+    if (g.mp && net.active) {
+      board = net.rosterList().map((p) => ({ name: p.name + (p.you ? ' (You)' : ''), earned: Math.round(p.personal || 0), you: p.you })).sort((a, b) => b.earned - a.earned);
+    } else {
+      const coworkers = [
+        { name: 'Ahmed', mult: 1.35 }, { name: 'JakeHub', mult: 1.12 }, { name: 'Hypercat', mult: 0.92 },
+        { name: 'Priya "Jennifer"', mult: 0.8 }, { name: 'Raju "Kevin"', mult: 0.66 }, { name: 'Vikram "Brad"', mult: 0.4 },
+      ];
+      const seed = total + days * 97;
+      board = [
+        { name: `${g.run?.alias ? g.run.alias.replace(/"/g, '') : 'You'} (You)`, earned: total, you: true },
+        ...coworkers.map((c, i) => ({ name: c.name, earned: Math.max(200, Math.round((total || 1200) * c.mult * (0.9 + ((seed * (i + 3)) % 20) / 100) / 50) * 50) })),
+      ].sort((a, b) => b.earned - a.earned);
+    }
     const leader = board[0].earned;
     this.show(el('div.screen.fired-screen',
       el('div.panel.termination',

@@ -189,6 +189,7 @@ async function boot() {
     unlockAudio();
     if (game.phase === 'menu') music.play('menu');
   };
+  document.addEventListener('contextmenu', (e) => { if (game.computerOpen || game.playing) e.preventDefault(); });
   window.addEventListener('pointerdown', firstGesture, { once: true });
   window.addEventListener('keydown', firstGesture, { once: true });
 

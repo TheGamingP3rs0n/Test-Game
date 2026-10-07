@@ -10,6 +10,7 @@ export class HUD {
     this.game = game;
     this.node = el('div.hud');
     this.clock = el('span.hud-clock', '9:00 AM');
+    this.overtime = el('span.hud-overtime', { style: { display: 'none' } }, 'OT 2:00');
     this.dayLabel = el('span.hud-day', 'DAY 1');
     this.quotaBar = el('div', { style: { width: '0%' } });
     this.quotaEarned = el('b', '$0');
@@ -19,7 +20,7 @@ export class HUD {
     this.heatBar = el('div', { style: { width: '0%' } });
     this.wallet = el('b', '$0');
     this.status = el('div.hud-status',
-      el('div.hud-row', this.dayLabel, this.clock),
+      el('div.hud-row', this.dayLabel, el('span', this.overtime, this.clock)),
       el('div.hud-quota', el('div.hud-row', el('span.label', 'Quota'), el('span', this.quotaEarned, ' ', this.quotaGoal)), el('div.bar', this.quotaBar), this.pending),
       el('div.hud-row.hud-small',
         el('span.hud-strikes', { title: 'Strikes — three and you\'re fired' }, el('span.label', 'Strikes'), this.strikeDots),
@@ -78,6 +79,9 @@ export class HUD {
       this.subTimer = setTimeout(() => this.subtitles.replaceChildren(), 4000 + l.text.length * 60);
     });
     bus.on('call:end', () => this.subtitles.replaceChildren());
+    bus.on('overtime:start', () => { this.overtime.style.display = ''; this.node.classList.add('overtime'); });
+    bus.on('overtime:end', () => { this.overtime.style.display = 'none'; this.node.classList.remove('overtime'); });
+    bus.on('overtime:tick', (left) => { const s = Math.ceil(left); this.overtime.textContent = `OT ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; });
   }
 
   /** One short line of the keys that matter right now (full list: pause → Controls). */

@@ -29,7 +29,6 @@ export const APPS = [
   { id: 'antivirus', name: 'DefendoMax', icon: '🛡️', day: 1 },
   { id: 'recorder', name: 'Recorder', icon: '⏺️', day: 1 },
   { id: 'paint', name: 'Paint', icon: '🎨', day: 2 },
-  { id: 'camera', name: 'Camera', icon: '📷', day: 2 },
   { id: 'docforge', name: 'DocForge', icon: '📄', day: 3 },
   { id: 'siteforge', name: 'SiteForge', icon: '🕸️', day: 4 },
   { id: 'scamazon', name: 'Scamazon', icon: '🛒', day: 1 },

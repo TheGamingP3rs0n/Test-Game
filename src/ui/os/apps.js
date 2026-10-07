@@ -8,7 +8,7 @@ import { COWORKERS, BOSS_CONTACT, coworkerReply } from '../../ai/coworkers.js';
 import { avatarDataUri } from '../portraits.js';
 import { remoteApp } from './remoteApp.js';
 import { browserApp } from './browserApp.js';
-import { paintApp, cameraApp, recorderApp, docforgeApp, siteforgeApp } from './creativeApps.js';
+import { paintApp, recorderApp, docforgeApp, siteforgeApp } from './creativeApps.js';
 import { scamApp } from './scamApps.js';
 import { scamazonApp, meteorCookieApp, disscordApp } from './extraApps.js';
 
@@ -48,7 +48,6 @@ export function buildApps(ctx) {
     antivirus: { name: 'DefendoMax', icon: '🛡️', width: 420, height: 300, render: (win) => antivirusApp(game, win) },
     recorder: { name: 'Recorder', icon: '⏺️', width: 460, height: 340, render: (win) => recorderApp(game, win) },
     paint: { name: 'Paint', icon: '🎨', width: 760, height: 560, render: (win) => paintApp(game, win) },
-    camera: { name: 'Camera', icon: '📷', width: 560, height: 520, render: (win) => cameraApp(game, win), onClose: (win) => win.cleanup?.() },
     docforge: { name: 'DocForge', icon: '📄', width: 820, height: 600, render: (win) => docforgeApp(game, win) },
     siteforge: { name: 'SiteForge', icon: '🕸️', width: 820, height: 600, render: (win) => siteforgeApp(game, win) },
     scamazon: { name: 'Scamazon', icon: '🛒', width: 680, height: 540, render: (win) => scamazonApp(game, win) },

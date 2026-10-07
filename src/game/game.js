@@ -82,6 +82,7 @@ export const game = {
     this.dayEnd = DAY_END + 60 * upgradeLevel(this.run, 'chai');
     this.clock = this.dayStart;
     this.dayFlags = {};
+    this.overtimeLeft = null;
     this.resetHazards();
     world.setMode('menu');
     world.office.setShame((this.run.shame || []).slice(-5));
@@ -114,7 +115,8 @@ export const game = {
   },
 
   get minutesPerSecond() {
-    return (this.dayEnd - this.dayStart) / (Math.max(2, settings.dayLengthMinutes) * 60);
+    // fixed 15-minute shift (480 in-game minutes over 15 real minutes)
+    return (this.dayEnd - this.dayStart) / (15 * 60);
   },
 
   tick(dt) {
@@ -135,11 +137,29 @@ export const game = {
       this.chat('idle', 0.7);
     }
     world.office.setClock(this.clock);
-    // co-op: the clock loops around the shift; the team ends the day by vote, not the bell
     if (this.clock >= this.dayEnd) {
-      if (this.mp) this.clock = this.dayStart + (this.clock - this.dayEnd);
-      else this.endDay();
+      if (this.mp) {
+        this.clock = this.dayStart + (this.clock - this.dayEnd); // co-op loops; ends by vote
+      } else if (this.overtimeLeft == null) {
+        this.startOvertime();
+      }
     }
+    if (this.overtimeLeft != null) {
+      this.clock = this.dayEnd;
+      this.overtimeLeft -= dt;
+      bus.emit('overtime:tick', Math.max(0, this.overtimeLeft));
+      if (this.overtimeLeft <= 0) {
+        this.overtimeLeft = null;
+        this.endDay();
+      }
+    }
+  },
+
+  startOvertime() {
+    this.overtimeLeft = 120; // two real minutes of overtime
+    sfx('error');
+    bus.emit('toast', { kind: 'bad', icon: 'clock5', title: 'OVERTIME', text: 'The bell rang but you\'re not done. Two minutes of overtime — the boss is NOT happy.' });
+    bus.emit('overtime:start');
   },
 
   ringNext() {
@@ -241,6 +261,8 @@ export const game = {
   // ------------------------------------------------------------------ end of day
   endDay() {
     if (this.phase !== 'playing') return;
+    this.overtimeLeft = null;
+    bus.emit('overtime:end');
     this.phase = 'review';
     if (this.calls.state !== 'idle') this.calls.end('shift_over');
     this.chaos.reset();

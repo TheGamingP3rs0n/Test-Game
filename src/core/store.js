@@ -1,6 +1,8 @@
 // Settings + run save, persisted in localStorage on this machine only.
 import { bus } from './bus.js';
 
+export const VERSION = 'v0.3.0';
+
 const SETTINGS_KEY = 'scc.settings.v1';
 const RUN_KEY = 'scc.run.v1';
 const META_KEY = 'scc.meta.v1';
