@@ -74,12 +74,13 @@ const SITES = [
     const out = el('div');
     const input = el('input', { placeholder: 'XXXX-XXXX-XXXX', style: { width: '220px', fontFamily: 'var(--mono)', fontSize: '18px' }, onkeydown: (e) => e.stopPropagation() });
     const check = () => {
-      const code = input.value.trim().toUpperCase();
-      const pay = (game.day?.pendingPayments || []).find((p) => p.cards?.some((c) => c.code === code));
+      const norm = (v) => String(v).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const code = norm(input.value);
+      const pay = (game.day?.pendingPayments || []).find((p) => p.code && norm(p.code) === code);
       if (!pay) return out.replaceChildren(el('p', '❓ Unknown code.'));
       out.replaceChildren(pay.fake ? el('p', { style: { color: '#c62828', fontWeight: 800 } }, '🚫 INVALID — this code was never activated. Someone is messing with you…') : el('p', { style: { color: '#137a43', fontWeight: 800 } }, '✅ Valid and unredeemed.'));
     };
-    const pending = (game.day?.pendingPayments || []).filter((p) => p.cards).flatMap((p) => p.cards.filter((c) => c.status === 'pending').map((c) => c.code));
+    const pending = (game.day?.pendingPayments || []).filter((p) => p.status === 'pending' && p.code).map((p) => p.code);
     return el('div.site', el('header', { style: { background: '#d81b60' } }, el('h1', '🎁 GiftCheck — card balance checker')), el('div.body', el('p', 'Check a gift card before redeeming it. Scambaiters love fake codes.'), el('div.row', input, el('button.xp-btn.primary', { onclick: check }, 'Check')), pending.length ? el('p', { style: { fontSize: '12px', color: '#666' } }, 'Codes waiting in your Cashier: ', ...pending.map((c) => el('a', { href: '#', style: { marginRight: '8px' }, onclick: (e) => (e.preventDefault(), (input.value = c), check()) }, c))) : null, out));
   }],
 

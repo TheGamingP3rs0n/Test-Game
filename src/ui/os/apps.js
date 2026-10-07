@@ -9,6 +9,7 @@ import { avatarDataUri } from '../portraits.js';
 import { remoteApp } from './remoteApp.js';
 import { browserApp } from './browserApp.js';
 import { paintApp, cameraApp, recorderApp, docforgeApp, siteforgeApp } from './creativeApps.js';
+import { scamApp } from './scamApps.js';
 
 /** Persist a file in the run (paintings, photos, clips, documents). */
 export function saveFile(game, file) {
@@ -36,7 +37,10 @@ export function buildApps(ctx) {
     remote: { name: 'RemoteHelp', icon: '🖥️', width: 980, height: 620, render: (win) => remoteApp(game, win, ctx) },
     notes: { name: 'Notes', icon: '📝', width: 520, height: 460, render: () => notesApp(game) },
     browser: { name: 'Browser', icon: '🌐', width: 860, height: 560, render: (win, opts) => browserApp(game, win, opts) },
-    cashier: { name: 'Cashier', icon: '💰', width: 560, height: 480, render: (win) => cashierApp(game, win) },
+    cashier: { name: 'Cashier', icon: '💰', width: 520, height: 460, render: (win) => cashierApp(game, win) },
+    giftcards: { name: 'Gift Cards', icon: '🎁', width: 460, height: 520, render: (win) => scamApp(game, win, 'giftcards') },
+    creditcard: { name: 'Credit Card', icon: '💳', width: 460, height: 520, render: (win) => scamApp(game, win, 'creditcard') },
+    identity: { name: 'Identity', icon: '🆔', width: 460, height: 520, render: (win) => scamApp(game, win, 'identity') },
     playbook: { name: 'Playbook', icon: '📘', width: 560, height: 520, render: () => playbookApp(game) },
     messenger: { name: 'Messenger', icon: '💬', width: 620, height: 460, render: (win) => messengerApp(game, win) },
     files: { name: 'Files', icon: '📁', width: 640, height: 440, render: (win) => filesApp(game, win, ctx) },
@@ -86,46 +90,29 @@ function notesApp(game) {
 
 function cashierApp(game, win) {
   const body = el('div.cashier');
+  const APP = { giftcards: 'Gift Cards', creditcard: 'Credit Card', identity: 'Identity' };
   const render = () => {
-    const pays = game.day?.pendingPayments || [];
-    const pending = game.pendingTotal();
+    const pays = (game.day?.pendingPayments || []).slice().reverse();
+    const pending = pays.filter((p) => p.status === 'pending' && !p.fake);
     body.replaceChildren(
-      el('div.app-toolbar', el('div', el('div', { style: { fontSize: '12px', color: '#555' } }, 'Collected today'), el('div.stat', money(game.day?.earned || 0))), el('div', { style: { marginLeft: '20px' } }, el('div', { style: { fontSize: '12px', color: '#555' } }, 'Waiting to collect'), el('div.stat', { style: { color: '#c77700' } }, money(pending)))),
-      pays.length ? null : el('div', { style: { padding: '20px', color: '#777' } }, 'No payments yet. Get a caller to pay with gift cards, a wire, crypto, or a bank transfer.'),
-      ...pays.slice().reverse().map((p) => payRow(game, p, render)),
+      el('div.app-toolbar',
+        el('div', el('div', { style: { fontSize: '12px', color: '#555' } }, 'Collected today'), el('div.stat', money(game.day?.earned || 0))),
+        el('div', { style: { marginLeft: '20px' } }, el('div', { style: { fontSize: '12px', color: '#555' } }, 'Waiting to collect'), el('div.stat', { style: { color: '#c77700' } }, money(game.pendingTotal())))),
+      pending.length ? el('div', { style: { padding: '8px 12px', fontSize: '12px', color: '#555' } }, 'Enter each caller\'s code in the app shown to collect it.') : null,
+      pays.length ? null : el('div', { style: { padding: '20px', color: '#777' } }, 'No payments yet. Build a caller\'s trust, then get them to read you a gift card code, card verification code, or ID number.'),
+      ...pays.map((p) => el('div.pay',
+        el('div.amt', money(p.amount)),
+        el('div', { style: { flex: 1 } }, el('b', `${APP[p.app] || p.app} — ${p.from}`), el('div', { style: { fontSize: '12px', color: '#666' } }, `at ${clockText(p.time || 540)}`)),
+        p.status === 'collected' ? el('b', { style: { color: '#137a43' } }, '✔ collected')
+          : p.status === 'invalid' ? el('b', { style: { color: '#c62828' } }, '✖ INVALID')
+          : p.status === 'expired' ? el('b', { style: { color: '#999' } }, 'expired')
+          : el('button.xp-btn.primary', { onclick: () => win.desktop.open(p.app) }, `Open ${APP[p.app] || p.app}`))),
     );
   };
   render();
-  const offs = ['call:payment', 'money:changed'].map((e) => bus.on(e, render));
+  const offs = ['call:payment', 'money:changed', 'call:end'].map((e) => bus.on(e, () => body.isConnected && render()));
   win.onClose = () => offs.forEach((o) => o());
   return body;
-}
-
-function payRow(game, p, rerender) {
-  const label = { gift_cards: '🎁 Gift cards', wire_transfer: '🏦 Wire transfer', crypto: '🪙 Crypto', bank_transfer: '🏦 Bank transfer', cash_by_mail: '✉️ Cash by mail' }[p.method] || p.method;
-  const status = (s) => (s === 'ok' || s === 'collected' ? el('b', { style: { color: '#137a43' } }, '✔ collected') : s === 'invalid' ? el('b', { style: { color: '#c62828' } }, '✖ INVALID') : null);
-  if (p.cards) {
-    return el('div', { style: { borderBottom: '2px solid #ddd' } },
-      el('div.pay', el('div.amt', money(p.amount)), el('div', { style: { flex: 1 } }, el('b', label), el('div', { style: { fontSize: '12px', color: '#666' } }, `from ${p.from} at ${clockText(p.time || 540)}`))),
-      ...p.cards.map((c, i) => el('div.pay', { style: { paddingLeft: '30px' } }, el('span.code', c.code), el('span', money(c.value)), el('span.spacer', { style: { flex: 1 } }),
-        status(c.status) || el('button.xp-btn.primary', { onclick: (e) => {
-          e.target.disabled = true;
-          e.target.textContent = 'Checking…';
-          setTimeout(() => {
-            game.collect(p, i);
-            rerender();
-          }, 700);
-        } }, 'Redeem'))));
-  }
-  return el('div.pay', el('div.amt', money(p.amount)), el('div', { style: { flex: 1 } }, el('b', label), el('div', { style: { fontSize: '12px', color: '#666' } }, `from ${p.from}`)),
-    status(p.status) || el('button.xp-btn.primary', { onclick: (e) => {
-      e.target.disabled = true;
-      e.target.textContent = 'Processing…';
-      setTimeout(() => {
-        game.collect(p);
-        rerender();
-      }, 1800);
-    } }, 'Confirm transfer'));
 }
 
 function playbookApp(game) {
@@ -138,9 +125,9 @@ function playbookApp(game) {
       el('div', { style: { fontSize: '12px', color: '#555' } }, `Pretend to be: ${s.impersonate}. Lead: ${s.leadSource}`),
       s.unlockDay <= day ? el('ol', s.playbook.map((step) => el('li', step))) : null)),
     el('h4', '🚩 Spotting scambaiters'),
-    el('ul', ['Too eager to buy gift cards, or happy to read codes before you even ask', 'Their PC says "VirtualBox", has OBS recording, or files about scammers', 'Gift card codes that come back INVALID in the Cashier', 'They send you files ending in .exe — never open those', 'Ask them something only a real old person would know... or just flag them (🚩) for a bounty'].map((t) => el('li', t))),
-    el('h4', '💡 Trust tips'),
-    el('ul', ['Use details from their PC (pet names, bank, family) — it makes you sound legit', 'Don\'t ask for money in your first few lines', 'Stay consistent: callers remember what you said', 'Office chaos is audible on the call. Callers notice cows.'].map((t) => el('li', t))),
+    el('ul', ['Too eager to buy gift cards, or happy to read codes before you even ask', 'Their PC says "VirtualBox", has OBS recording, or files about scammers', 'Gift card codes that come back INVALID when you Verify them', 'They send you files ending in .exe — never open those', 'Ask them something only a real old person would know... or just flag them (🚩) for a bounty'].map((t) => el('li', t))),
+    el('h4', '💡 How to get paid'),
+    el('ul', ['Build trust first, THEN ask them to read you a gift card code, card verification code, or ID number', 'Their code appears in the Phone transcript — type it into the matching app (Gift Cards / Credit Card / Identity) and hit Verify', 'Enter codes before 5 PM — uncollected codes are lost at the end of the shift', 'Use details from their PC (pet names, bank, family) to push trust higher and unlock bigger payouts', 'Scambaiters read FAKE codes that come back INVALID and raise police heat — check suspicious ones in GiftCheck first'].map((t) => el('li', t))),
   );
 }
 

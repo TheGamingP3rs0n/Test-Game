@@ -35,6 +35,10 @@ const MAP = {
   obs: ['flat', 'video-call'],
   vbox: ['flat', 'org-unit'],
   user: ['fluent', 'person-48'],
+  // scam earner apps
+  giftcards: ['fluent', 'gift-card-24'],
+  creditcard: ['flat', 'money-transfer'],
+  identity: ['fluent', 'contact-card-48'],
 };
 
 const out = {};

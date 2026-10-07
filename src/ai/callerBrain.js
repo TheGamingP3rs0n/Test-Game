@@ -10,7 +10,7 @@ import { privateFacts } from '../game/profile.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'excited', 'confused', 'suspicious', 'angry', 'scared', 'sad'];
 export const ACTIONS = ['none', 'grant_remote', 'pay', 'hang_up', 'expose', 'send_file', 'hold'];
-export const PAY_METHODS = ['none', 'gift_cards', 'wire_transfer', 'crypto', 'bank_transfer', 'cash_by_mail'];
+export const PAY_METHODS = ['none', 'gift_cards', 'wire_transfer', 'crypto', 'bank_transfer', 'cash_by_mail', 'credit_card', 'identity'];
 
 export const TRUST_THRESHOLDS = { remote: 35, pay: 55 };
 
@@ -84,6 +84,11 @@ export class CallerConversation {
   /** Most this caller would hand over in a single payment right now. */
   paymentCap(method = 'gift_cards') {
     const quota = this.ctx.quota || 1500;
+    // identity / credit-card "read me the code" scams are a flat bounty, not their whole savings
+    if (method === 'identity' || method === 'credit_card') {
+      const trustFactor = clamp((this.trust - 40) / 60, 0.3, 1);
+      return Math.round(quota * (method === 'identity' ? 0.16 : 0.22) * (0.6 + trustFactor * 0.4) / 10) * 10;
+    }
     const small = method === 'gift_cards' || method === 'cash_by_mail' || method === 'none';
     const methodCap = quota * (small ? 0.45 : 0.75) * Math.pow(0.6, this.payments);
     const trustFactor = clamp((this.trust - 40) / 60, 0.25, 1);
@@ -136,7 +141,7 @@ export class CallerConversation {
       '- reply: what you say out loud on the phone: 1-3 short spoken sentences, max 45 words. It MUST respond to the agent\'s last line specifically: answer their question, follow (or fumble) their instruction, or react to what they claimed. If it made no sense, say you don\'t understand. Never give a generic "go on" reply. You may start with ONE vocal direction like [nervous], [laughing], [whispering], [angry], [confused].',
       '- trust_change (-25 to +15): how much the agent\'s LAST line changed your trust. Usually -8..+8; 0 only for pure filler. UP when they sound official and confident, correctly state your private details, explain clearly, reassure you, scare you convincingly (if gullible), or show convincing things on your screen. DOWN when they ask for money, gift cards or remote access too early or bluntly, get details wrong, contradict themselves, are rude, say absurd or nonsense things, or you hear suspicious noises. Gullible = bigger gains, skeptical = bigger losses, smart = catches mistakes.',
       '- trust_reason: max 8 words, your point of view (e.g. "knew my dog\'s name"). patience_change: -15..+10. emotion. inner_thought: one funny secret sentence.',
-      `- action: "none"; "grant_remote" (only if they asked you to install software or visit a site AND trust >= ${TRUST_THRESHOLDS.remote}: you install it and read your access code ${p.remoteCode} aloud); "pay" (only if they explicitly asked for payment AND trust >= ${TRUST_THRESHOLDS.pay}: say the amount out loud, for gift cards say you bought them and read the codes); "hold" (step away briefly); "hang_up" (fed up, scared off, or realized it's a scam)${this.isBaiter ? '; "send_file" (send them a "document" — secretly malware); "expose" (reveal you are a scambaiter and end the call)' : ''}.`,
+      `- action: "none"; "grant_remote" (only if they asked you to install software or visit a site AND trust >= ${TRUST_THRESHOLDS.remote}: you install it and read your access code ${p.remoteCode} aloud); "pay" (only if they explicitly asked AND trust >= ${TRUST_THRESHOLDS.pay}). "pay" covers every way they get value from you — set pay_method: "gift_cards" (you bought cards and READ THE CODE on the back out loud), "credit_card" (you read your card's verification code out loud), "identity" (you read your ${sc.impersonate && /tax|irs|ird|government|bank|social|cyber|police|security/i.test(sc.impersonate) ? 'taxpayer/SSN verification code' : 'account verification code'} out loud to "confirm your record"), or "wire_transfer"/"crypto"/"bank_transfer" for a direct transfer. When paying by gift_cards/credit_card/identity, say out loud that you are reading them the code/number now and say the amount — the game shows the exact digits to the agent, so do NOT invent specific digits yourself.); "hold" (step away briefly); "hang_up"${this.isBaiter ? '; "send_file" (send a "document" — secretly malware); "expose" (reveal you are a scambaiter and end the call)' : ''}.`,
       '- Not paying: pay_amount 0, pay_method "none".',
       '',
       '# INPUT: "Agent:" = what the agent says (speech-to-text, may have typos). [SCREEN] = what you see happening on your computer. [BACKGROUND] = noises from their end. [SYSTEM] = stage directions. [STATE] = your current trust, patience and mood: act consistently with it.',
@@ -376,6 +381,11 @@ const CANNED = {
   baiterExpose: ["[laughing] Gotcha! This whole call is streaming live to thousands of viewers. Say hi, scammer!", "Ha! There is no {first}. I'm a scambaiter, and your number just got reported."],
   baiterFile: ["I'll just send you my bank document so you can see it. It's called bank_statement.pdf.exe, is that normal?"],
   hold: ["Hold on, dear, I need to find my glasses. Don't go anywhere!"],
+  readCode: [
+    "Okay, hold on, let me find my glasses and read it to you... alright, here it is. That's for ${amount}, yes?",
+    "Alright dear, I'll read it out to you now. Please make the problem go away. ${amount}, you said?",
+    "Okay... I'm reading it to you now. Oh I do hope this fixes everything. That's ${amount}.",
+  ],
 };
 
 function fill(line, conv, extra = {}) {
@@ -432,6 +442,7 @@ export function offlineBrain(conv, input, { opening = false, isEvent = false } =
   if (KW.scamword.test(text)) (d -= 12), reasons.push('said something sketchy');
   const asksMoney = KW.money.test(text);
   const asksRemote = KW.remote.test(text);
+  const asksCode = /\b(gift ?cards?|code|ssn|social security|taxpayer|card number|verification|verify your (identity|record)|read (me|it|that) back|activate)\b/i.test(text);
   if (asksMoney && conv.trust < TRUST_THRESHOLDS.pay) (d -= 6 + s.skepticism), reasons.push('asked for money too soon');
   if (text.split(/\s+/).length < 3) d -= 1;
   out.trust_change = clamp(Math.round(d + (Math.random() * 4 - 2)), -30, 20);
@@ -469,11 +480,14 @@ export function offlineBrain(conv, input, { opening = false, isEvent = false } =
     out.action = 'grant_remote';
     out.reply = say('remote');
     out.emotion = 'confused';
-  } else if (asksMoney && projected >= TRUST_THRESHOLDS.pay) {
+  } else if ((asksMoney || asksCode) && projected >= TRUST_THRESHOLDS.pay) {
     out.action = 'pay';
-    out.pay_method = /bitcoin|crypto/i.test(text) ? 'crypto' : /wire|western/i.test(text) ? 'wire_transfer' : 'gift_cards';
+    out.pay_method = /social security|ssn|taxpayer|tax id|verify your (identity|record)/i.test(text) ? 'identity'
+      : /credit card|debit card|card number|card verification|cvv|security code on/i.test(text) ? 'credit_card'
+      : /bitcoin|crypto/i.test(text) ? 'crypto' : /wire|western/i.test(text) ? 'wire_transfer' : 'gift_cards';
     out.pay_amount = Math.round((conv.paymentCap(out.pay_method) * (0.7 + Math.random() * 0.3)) / 10) * 10;
-    out.reply = say('pay', { amount: out.pay_amount });
+    const codey = ['gift_cards', 'credit_card', 'identity'].includes(out.pay_method);
+    out.reply = codey ? fill(pick(CANNED.readCode), conv, { amount: out.pay_amount }) : say('pay', { amount: out.pay_amount });
     out.emotion = 'scared';
   } else if (asksMoney) {
     out.reply = say('noPay');

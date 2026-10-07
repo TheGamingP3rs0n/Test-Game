@@ -28,7 +28,7 @@ export class Computer {
     bus.on('computer:virus', (on) => this.setVirus(on));
     bus.on('call:file', (file) => this.incomingFile(file));
     bus.on('call:remote', ({ code }) => this.desktop?.notify(`🖥️ Remote session ready. ID ${code}`, { actions: [{ label: 'Open RemoteHelp', primary: true, onClick: () => this.desktop.open('remote') }] }));
-    bus.on('call:payment', (p) => this.desktop?.notify(`💸 Incoming ${p.method.replace(/_/g, ' ')} from ${p.from}: $${p.amount.toLocaleString()}`, { actions: [{ label: 'Open Cashier', primary: true, onClick: () => this.desktop.open('cashier') }] }));
+    bus.on('call:payment', (p) => { const APP = { giftcards: 'Gift Cards', creditcard: 'Credit Card', identity: 'Identity' }; this.desktop?.notify(`${p.from} read you a code — enter it in ${APP[p.app] || 'Cashier'} to collect $${p.amount.toLocaleString()}`, { icon: 'payout', actions: [{ label: `Open ${APP[p.app] || 'Cashier'}`, primary: true, onClick: () => this.desktop.open(p.app || 'cashier') }] }); });
     bus.on('chat:message', (m) => {
       if (this.wrap?.isConnected && !this.desktop.windows.has('messenger')) this.desktop.notify(`💬 ${m.from === 'boss' ? 'BOSS' : m.from[0].toUpperCase() + m.from.slice(1)}: ${m.text}`, { ms: 4000 });
     });

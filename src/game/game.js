@@ -175,25 +175,20 @@ export const game = {
     return (this.day?.pendingPayments || []).filter((p) => p.status === 'pending' && !p.fake).reduce((s, p) => s + p.amount, 0);
   },
 
-  /** Cashier app: redeem a gift card or confirm a transfer. Returns 'ok' | 'invalid'. */
-  collect(pay, cardIndex = null) {
+  /** Normalize a typed code for comparison (ignore spaces, dashes, case). */
+  normCode(v) {
+    return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  },
+
+  /**
+   * A scam app verifies the code the caller read out. Returns:
+   *   'ok'       — code matched a real caller → money earned
+   *   'invalid'  — code matched, but the caller was a scambaiter (fake) → heat
+   *   'mismatch' — the typed code doesn't match what they read you
+   */
+  verifyScam(pay, entered) {
     if (pay.status !== 'pending') return pay.status;
-    if (pay.cards && cardIndex !== null) {
-      const card = pay.cards[cardIndex];
-      if (card.status !== 'pending') return card.status;
-      if (pay.fake) {
-        card.status = 'invalid';
-        sfx('error');
-      } else {
-        card.status = 'ok';
-        this.addMoney(card.value, `Gift card from ${pay.from}`);
-      }
-      if (pay.cards.every((c) => c.status !== 'pending')) {
-        pay.status = pay.fake ? 'invalid' : 'collected';
-        if (pay.fake) this.onFakePayment(pay);
-      }
-      return card.status;
-    }
+    if (this.normCode(entered) !== this.normCode(pay.code)) return 'mismatch';
     if (pay.fake) {
       pay.status = 'invalid';
       sfx('error');
@@ -201,7 +196,22 @@ export const game = {
       return 'invalid';
     }
     pay.status = 'collected';
-    this.addMoney(pay.amount, `${pay.method.replace(/_/g, ' ')} from ${pay.from}`);
+    const label = { giftcards: 'gift card', creditcard: 'card charge', identity: 'identity scam' }[pay.app] || 'payment';
+    this.addMoney(pay.amount, `${label} from ${pay.from}`);
+    return 'ok';
+  },
+
+  /** Direct collect (internal use; apps go through verifyScam). */
+  collect(pay) {
+    if (pay.status !== 'pending') return pay.status;
+    if (pay.fake) {
+      pay.status = 'invalid';
+      sfx('error');
+      this.onFakePayment(pay);
+      return 'invalid';
+    }
+    pay.status = 'collected';
+    this.addMoney(pay.amount, `${(pay.method || '').replace(/_/g, ' ')} from ${pay.from}`);
     return 'ok';
   },
 
@@ -230,13 +240,10 @@ export const game = {
     stopAllLoops();
     speaker.stop();
     this.closeComputer();
-    // the boss sweeps any real payments you forgot to collect
-    for (const p of this.day.pendingPayments) {
-      if (p.status === 'pending' && !p.fake) {
-        p.status = 'collected';
-        this.day.earned += p.amount;
-      }
-    }
+    // payments you never entered into a scam app are lost (you were too slow)
+    const missed = this.day.pendingPayments.filter((p) => p.status === 'pending' && !p.fake);
+    for (const p of missed) p.status = 'expired';
+    if (missed.length) this.addHighlight(`Left ${money(missed.reduce((s, p) => s + p.amount, 0))} uncollected — never entered the codes in time.`);
     const d = this.day;
     const verdict = decideVerdict({ earned: d.earned, quota: d.quota, strikes: this.run.strikes });
     const report = {

@@ -11,9 +11,15 @@ import { upgradeLevel } from './progression.js';
 
 const RING_SECONDS = 24;
 
-function giftCode() {
-  const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 3 }, () => Array.from({ length: 4 }, () => c[Math.floor(Math.random() * c.length)]).join('')).join('-');
+// Which "scam app" collects a given payment method, plus a fictional verification code
+// the caller reads out (abstract digits only — the player types it into the app).
+export const SCAM_APP = { gift_cards: 'giftcards', cash_by_mail: 'giftcards', credit_card: 'creditcard', wire_transfer: 'creditcard', bank_transfer: 'creditcard', crypto: 'creditcard', identity: 'identity' };
+const APP_NAME = { giftcards: 'Gift Cards', creditcard: 'Credit Card', identity: 'Identity' };
+const d = (n) => Array.from({ length: n }, () => Math.floor(Math.random() * 10)).join('');
+function scamCode(method) {
+  if (method === 'gift_cards' || method === 'cash_by_mail') return `${d(4)}-${d(4)}`;
+  if (method === 'identity') return `${d(3)}-${d(2)}-${d(4)}`;
+  return d(6);
 }
 
 export class CallManager {
@@ -198,14 +204,14 @@ export class CallManager {
   receivePayment(r) {
     const amount = Math.round(r.payAmount);
     const method = r.payMethod || 'gift_cards';
-    const pay = { id: uid('pay'), amount, method, fake: !!r.fake, from: this.caller.name, status: 'pending', time: this.game.clock };
-    if (method === 'gift_cards') {
-      const n = clamp(Math.ceil(amount / 500), 1, 6);
-      pay.cards = Array.from({ length: n }, (_, i) => ({ code: giftCode(), value: i === n - 1 ? amount - Math.floor(amount / n) * (n - 1) : Math.floor(amount / n), status: 'pending' }));
-    }
+    const app = SCAM_APP[method] || 'giftcards';
+    const code = scamCode(method);
+    const fieldName = { giftcards: 'gift card code', creditcard: 'card verification code', identity: method === 'identity' ? 'verification number' : 'confirmation code' }[app];
+    const pay = { id: uid('pay'), amount, method, app, code, fake: !!r.fake, from: this.caller.name, status: 'pending', time: this.game.clock };
     if (!this.sandbox && this.game.day) this.game.day.pendingPayments.push(pay);
-    const label = { gift_cards: 'gift cards', wire_transfer: 'a wire transfer', crypto: 'crypto', bank_transfer: 'a bank transfer', cash_by_mail: 'cash in the mail' }[method] || method;
-    bus.emit('call:line', { who: 'system', icon: 'payout', html: `<b>${this.caller.firstName} sent ${money(amount)} in ${label}.</b> Collect it in the <b>Cashier</b> app.` });
+    // the caller reads the code out loud → it shows in the transcript; the player enters it in the app
+    bus.emit('call:line', { who: 'caller', text: `Okay... my ${fieldName} is ${code}. Did you get that?`, emotion: r.emotion });
+    bus.emit('call:line', { who: 'system', icon: 'payout', html: `Enter ${this.caller.firstName}'s code <span class="code">${code}</span> in the <b>${APP_NAME[app]}</b> app to collect ${money(amount)}.` });
     bus.emit('call:payment', pay);
     sfx('notify');
   }
