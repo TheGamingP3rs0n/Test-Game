@@ -13,7 +13,7 @@ import {
 import { pick } from '../core/util.js';
 import { drawIcon } from '../ui/icons.js';
 
-export const ROOM = { minX: -9, maxX: 9, minZ: -6, maxZ: 6, height: 2.9 };
+export const ROOM = { minX: -9, maxX: 9, minZ: -6, maxZ: 6, height: 3.25 };
 const ROW_Z = [-3.2, -0.4, 2.4];
 const DESK_X = [-6.8, -5.2, -3.6, -2.0, -0.4];
 export const PLAYER_DESK = { x: -2.0, z: 2.4 };
@@ -796,6 +796,7 @@ export class Office {
 
   async buildCharacters() {
     const names = [...CHARACTERS.coworkers];
+    const deskNames = ['Rajesh', 'Kevin', 'Priya', 'Sunil', 'Amit', 'Neha', 'Vikram', 'Deepa'];
     // seats: 0-4 front row, 5-9 middle row, 10-13 back row (yours is between 12 and 13)
     const seatOrder = [1, 4, 6, 10].map((i) => this.seats[i]).filter(Boolean);
     const lines = ['Hello sir, I am calling from Windoze.', "Please do the needful ma'am.", 'Your computer is having virus!', 'Google Play card sir, Google Play!', 'Yes yes, I am Kevin from Texas.', 'Sir do not hang up sir!', 'Madam please open the black window.'];
@@ -807,6 +808,7 @@ export class Office {
       npc.play('sit');
       npc.seat = seat;
       npc.lines = lines;
+      npc.label = deskNames[i % deskNames.length];
       npc.chatter = 3 + Math.random() * 10;
       this.root.add(npc.root);
       this.coworkers.push(npc);
@@ -815,6 +817,7 @@ export class Office {
     this.boss = await NPC.create('characters', CHARACTERS.boss);
     this.boss.root.position.copy(this.bossSpot);
     this.boss.root.rotation.y = Math.PI * 0.85;
+    this.boss.label = 'the boss';
     this.root.add(this.boss.root);
     this.npcs.push(this.boss);
   }
@@ -905,6 +908,7 @@ export class Office {
     for (let i = 0; i < count; i++) {
       const cop = await NPC.create('characters', CHARACTERS.police);
       cop.root.position.set(ROOM.maxX + 1.2 + i * 0.8, 0, 3);
+      cop.label = 'the cop';
       this.root.add(cop.root);
       this.npcs.push(cop);
       officers.push(cop);
@@ -933,6 +937,7 @@ export class Office {
   async spawnCow() {
     const cow = await NPC.create('animals', 'animal-cow', { scale: 0.95 });
     cow.root.position.set(ROOM.maxX + 1.5, 0, 3);
+    cow.label = 'the office cow';
     this.root.add(cow.root);
     this.npcs.push(cow);
     cow.walk([[ROOM.maxX - 1, 3], [1.0, 3.6], [-0.9, 4.5]], { speed: 1.1, onArrive: (n) => n.play('eat') });

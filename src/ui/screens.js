@@ -171,7 +171,8 @@ export class Screens {
     const key = (settings.pttKey || 'KeyV').replace('Key', '');
     const rows = [
       ['F', 'Answer the ringing phone'], [key, 'Hold to talk to the caller'], ['Enter', 'Type instead of talking'], ['Tab', 'Use / leave your computer'],
-      ['WASD', 'Walk around the office'], ['E / Click', 'Interact (breakers, router, shredder…)'], ['C', 'Crouch — hide under your desk'], ['Shift', 'Run'], ['Esc', 'Pause'],
+      ['WASD', 'Walk around the office'], ['Space', 'Jump'], ['Shift', 'Sprint (uses stamina)'], ['E / Click', 'Interact (breakers, router, shredder…)'], ['C', 'Crouch — hide under your desk'],
+      ['1–9', 'Equip a Scamazon tool'], ['F', 'Swing the equipped tool'], ['Esc', 'Pause'],
     ];
     modal(el('div', el('h2', 'Controls'), el('div.controls-list', rows.map(([k, t]) => el('div.ctl', el('span.kbd', k), el('span', t))))));
   }

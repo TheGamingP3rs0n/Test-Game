@@ -265,6 +265,12 @@ const SFX = {
     tone({ freq: 1046, dur: 0.08, vol: 0.12, type: 'square' });
     tone({ freq: 784, start: 0.08, dur: 0.1, vol: 0.12, type: 'square' });
   },
+  zap() {
+    // comedic "performance review" whack/zap for the Scamazon physical tools
+    noise({ dur: 0.14, vol: 0.4, filter: 'bandpass', freq: 2200, q: 1.2, sweepTo: 500 });
+    tone({ freq: 900, dur: 0.16, vol: 0.2, type: 'sawtooth', glide: 160 });
+    tone({ freq: 160, start: 0.04, dur: 0.18, vol: 0.18, type: 'square', glide: 80 });
+  },
 };
 
 const UI_SFX = new Set(['click', 'hover', 'pause', 'unpause']);

@@ -48,6 +48,7 @@ export class RemotePlayers {
     const tag = textSprite(name || `Agent ${id}`, { bg: color || '#1f9d4c', fg: '#fff', font: 'bold 34px Inter, Arial' });
     tag.position.set(0, 2.1, 0);
     npc.root.add(tag);
+    npc.label = name || `Agent ${id}`;
     slot.npc = npc;
     slot.tag = tag;
     slot.color = color;
@@ -58,6 +59,7 @@ export class RemotePlayers {
     const s = this.peers.get(id);
     if (!s || s.name === name) return;
     s.name = name;
+    if (s.npc) s.npc.label = name;
     if (s.npc && s.tag) {
       s.npc.root.remove(s.tag);
       s.tag.material.map?.dispose();

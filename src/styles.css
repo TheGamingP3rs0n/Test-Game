@@ -166,6 +166,20 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 @keyframes clockpop { from { transform: translateX(-50%) scale(.6); opacity: 0 } }
 @keyframes clockglow { 50% { box-shadow: 0 10px 40px rgba(47,211,107,.8), inset 0 1px 0 rgba(255,255,255,.4); } }
 body.pc-open .clock-out, body.voting .clock-out { display: none !important; }
+.stamina { position: absolute; left: 14px; bottom: 50px; display: flex; align-items: center; gap: 8px; background: rgba(6,14,10,.7); padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.1); }
+.stamina > .ico { color: var(--muted); font-size: 16px; }
+.stamina .bar { width: 120px; height: 7px; background: #1c2a22; border-radius: 4px; overflow: hidden; }
+.stamina .bar > div { height: 100%; transition: width .1s, background .2s; border-radius: 4px; }
+/* physical-tool hotbar (Scamazon "personal safety") */
+.hud-toolbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 8px; pointer-events: auto; }
+.tool-slot { position: relative; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; background: rgba(6,14,10,.72); border: 1.5px solid rgba(255,255,255,.14); border-radius: 12px; cursor: pointer; transition: border-color .12s, transform .12s, background .12s; }
+.tool-slot:hover { transform: translateY(-2px); background: rgba(10,20,14,.85); }
+.tool-slot.on { border-color: var(--yellow); background: rgba(40,30,8,.85); box-shadow: 0 0 0 2px rgba(240,160,30,.3); }
+.tool-slot .tool-ico { font-size: 24px; }
+.tool-slot .tool-ico .ico { width: 24px; height: 24px; }
+.tool-slot .tool-key { position: absolute; top: 2px; left: 5px; font-size: 10px; font-weight: 900; color: var(--muted); }
+.tool-slot .tool-qty { position: absolute; bottom: 1px; right: 4px; font-size: 10px; font-weight: 800; color: var(--fg); }
+body.pc-open .hud-toolbar, body.voting .hud-toolbar { display: none !important; }
 .hidden-indicator { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); background: rgba(31,157,76,.9); padding: 7px 16px; border-radius: 999px; font-weight: 900; display: flex; gap: 8px; align-items: center; }
 
 /* ------------------------------------------------------------------ notifications */
@@ -675,28 +689,32 @@ body.pc-open .banner { top: 18px; }
 @media (max-width: 720px) { .term-head { flex-direction: column; } .term-haul { text-align: left; } .term-earned, .term-avg { width: 90px; font-size: 15px; } .term-cols > span:nth-child(3), .term-cols > span:nth-child(4) { width: 90px; } }
 
 /* Scamazon */
-.scamazon { height: 100%; display: flex; flex-direction: column; background: #eef1f5; color: #142033; }
-.sz-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: linear-gradient(#182334, #0f1724); color: #fff; }
-.sz-logo { display: flex; align-items: center; gap: 8px; font-size: 22px; font-weight: 900; }
-.sz-logo .ico { color: #ff9900; font-size: 24px; }
-.sz-market { background: #ff9900; color: #142033; font-weight: 900; font-size: 13px; padding: 2px 8px; border-radius: 5px; letter-spacing: 1px; }
-.sz-wallet { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 14px; }
-.sz-wallet .ico { color: #ffd34d; } .sz-wallet b { color: #35d46f; } .sz-wallet span { opacity: .7; font-size: 12px; }
-.sz-tabs { display: flex; gap: 8px; padding: 10px 16px; background: #dfe4ea; }
-.sz-tab { padding: 7px 16px; border-radius: 999px; background: #fff; border: 1px solid #c4ccd6; cursor: pointer; font-weight: 800; font-size: 13px; color: #40506a; }
-.sz-tab.on { background: #182334; color: #fff; border-color: #182334; }
-.sz-grid { flex: 1; overflow: auto; padding: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; align-content: start; }
-.sz-item { background: #fff; border: 1px solid #d5dce6; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 2px 6px rgba(0,0,0,.05); }
-.sz-item.owned { border-color: #35d46f; }
-.sz-ico { font-size: 34px; } .sz-ico .ico { width: 40px; height: 40px; }
-.sz-nm { font-weight: 900; font-size: 16px; }
-.sz-ds { font-size: 12.5px; color: #5a6b82; flex: 1; line-height: 1.4; }
-.sz-lvl { font-size: 11px; color: #8a98ab; font-weight: 700; }
-.hold-buy { position: relative; overflow: hidden; border: 0; border-radius: 10px; padding: 11px; font-weight: 900; font-size: 13.5px; color: #142033; background: linear-gradient(#ffd45e, #ffb400); cursor: pointer; user-select: none; }
+.scamazon { height: 100%; display: flex; flex-direction: column; background: #ffffff; color: #1b2430; }
+.sz-bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #14202e; color: #fff; border-bottom: 3px solid #ff9900; }
+.sz-logo { display: flex; align-items: center; gap: 6px; font-size: 22px; font-weight: 900; letter-spacing: .5px; }
+.sz-dollar { color: #2fd36b; font-size: 26px; font-weight: 900; }
+.sz-market { background: #ff9900; color: #14202e; font-weight: 900; font-size: 13px; padding: 3px 9px; border-radius: 5px; letter-spacing: 1px; }
+.sz-hello { margin-left: auto; font-size: 13px; opacity: .85; border-left: 1px solid rgba(255,255,255,.2); padding-left: 14px; }
+.sz-tabs { display: flex; gap: 10px; padding: 10px 16px; background: #14202e; }
+.sz-tab { padding: 8px 16px; border-radius: 8px; background: #233141; color: #cdd6e0; cursor: pointer; font-weight: 800; font-size: 14px; border: 2px solid transparent; }
+.sz-tab:hover { background: #2c3d50; }
+.sz-tab.on { background: #fff; color: #14202e; border-color: #ff9900; }
+.sz-cat { padding: 10px 18px; background: #fde7f2; color: #b3266e; font-weight: 800; font-size: 14px; border-bottom: 1px solid #f3c6db; }
+.sz-grid { flex: 1; overflow: auto; padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); grid-auto-rows: max-content; gap: 16px; align-content: start; }
+.sz-item { background: #fff; border: 1px solid #e2e6ea; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.08); display: flex; flex-direction: column; }
+.sz-item.owned { border-color: #2fd36b; box-shadow: 0 0 0 2px rgba(47,211,107,.3); }
+.sz-img { height: 120px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.95); }
+.sz-img .ico { width: 64px; height: 64px; filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); }
+.sz-body { padding: 14px; display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; }
+.sz-nm { font-weight: 900; font-size: 16px; line-height: 1.2; }
+.sz-ds { font-size: 13px; color: #5c6b7a; line-height: 1.4; }
+.sz-price { font-weight: 900; font-size: 18px; color: #b3261e; margin-top: auto; }
+.sz-lvl { font-size: 11px; color: #8a98a6; font-weight: 700; }
+.sz-need { border: 0; border-radius: 10px; padding: 12px; font-weight: 900; font-size: 14px; color: #fff; background: #d1434b; cursor: not-allowed; opacity: .95; }
+.hold-buy { position: relative; overflow: hidden; border: 0; border-radius: 10px; padding: 12px; font-weight: 900; font-size: 14px; color: #14202e; background: linear-gradient(#ffd45e, #ffb400); cursor: pointer; user-select: none; }
 .hold-buy > span { position: relative; z-index: 1; }
-.hold-buy .hold-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(53,212,111,.6); z-index: 0; }
+.hold-buy .hold-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(47,211,107,.6); z-index: 0; }
 .hold-buy.disabled { background: #dfe4ea; color: #9aa7b8; cursor: default; }
-.sz-item.owned .hold-buy { background: #e6f8ec; color: #1f9d4c; }
 
 /* Meteor Cookie */
 .meteorcookie { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; background: radial-gradient(circle at 50% 35%, #2a2217, #140f0a); color: #f0e2c0; padding: 16px; }

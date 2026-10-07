@@ -126,6 +126,33 @@ class World {
     return () => (this.listeners = this.listeners.filter((f) => f !== fn));
   }
 
+  /** The NPC (coworker / boss / cop / cow / remote player) the camera is pointed at,
+   *  within a forgiving forward cone — used to aim the Scamazon physical tools. */
+  aimNpc(maxDist = 3.8) {
+    const from = this.camera.position;
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+    dir.y = 0;
+    if (dir.lengthSq() < 1e-6) return null;
+    dir.normalize();
+    const peers = [...this.remotePlayers.peers.values()].map((p) => p.npc).filter(Boolean);
+    const list = [...this.office.npcs, ...peers];
+    const p = new THREE.Vector3();
+    let best = null;
+    let bestDist = Infinity;
+    for (const npc of list) {
+      if (!npc?.root) continue;
+      npc.root.getWorldPosition(p);
+      const to = p.sub(from);
+      to.y = 0;
+      const dist = to.length();
+      if (dist < 0.35 || dist > maxDist) continue;
+      to.normalize();
+      if (to.dot(dir) > 0.8 && dist < bestDist) { bestDist = dist; best = npc; }
+    }
+    return best;
+  }
+
   /**
    * 'menu'     slow fly-around behind the main menu
    * 'play'     first-person control

@@ -71,6 +71,14 @@ export class NPC {
     this.bubbleTimer = seconds;
   }
 
+  /** A comedic "spook" — hop, panic-spin, and a little outburst — then settle back.
+   *  Used when a coworker/NPC is on the wrong end of a Scamazon "personal safety" tool. */
+  react(text = '!!!') {
+    if (this.baseY == null) { this.baseY = this.root.position.y; this.baseRotY = this.root.rotation.y; }
+    this.reactT = 1.1;
+    this.say(text, 2.4);
+  }
+
   clearBubble() {
     if (this.bubble) {
       this.root.remove(this.bubble);
@@ -83,6 +91,18 @@ export class NPC {
   update(dt) {
     this.time += dt;
     this.mixer.update(dt);
+    if (this.reactT > 0) {
+      this.reactT = Math.max(0, this.reactT - dt);
+      const k = this.reactT; // 1.1 -> 0
+      this.root.position.y = this.baseY + Math.abs(Math.sin(k * 16)) * 0.16 * k;
+      if (k > 0.35) this.root.rotation.y += dt * 13; // flail in a panic
+      else { // settle back to where they were facing
+        let d = this.baseRotY - this.root.rotation.y;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        this.root.rotation.y += d * Math.min(1, dt * 12);
+      }
+      if (this.reactT === 0) { this.root.position.y = this.baseY; this.root.rotation.y = this.baseRotY; this.baseY = null; }
+    }
     if (this.path.length) {
       const target = this.path[0];
       const pos = this.root.position;

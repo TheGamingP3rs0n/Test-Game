@@ -26,6 +26,9 @@ export class Player {
     this.dragging = false;
     this.locked = false;
     this.hidden = false;
+    this.stamina = 100;
+    this.jumpOff = 0;
+    this.jumpVel = 0;
     this.bindInput();
   }
 
@@ -60,7 +63,8 @@ export class Player {
         this.requestLock();
         if (!this.locked) this.dragging = true; // fallback when pointer lock is unavailable
       } else if (e.button === 0 && this.locked) {
-        this.interact();
+        if (this.target || this.holding === 'extinguisher') this.interact();
+        else bus.emit('player:fire'); // nothing to interact with — swing a held Scamazon tool
       }
     });
     document.addEventListener('mouseup', () => (this.dragging = false));
@@ -70,6 +74,8 @@ export class Player {
       if (!this.enabled) return;
       if (e.code === 'KeyE') this.interact();
       if (e.code === 'KeyC') this.toggleCrouch();
+      if (e.code === 'KeyF' && this.mode !== 'seated') bus.emit('player:fire');
+      if (e.code === 'Space') { e.preventDefault(); this.jump(); }
     });
     document.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
@@ -127,6 +133,12 @@ export class Player {
     bus.emit('player:mode', this.mode);
   }
 
+  jump() {
+    if (!this.enabled || this.mode === 'crouch' || this.jumpOff > 0.001) return;
+    if (this.mode === 'seated') this.standUp();
+    this.jumpVel = 3.6;
+  }
+
   toggleCrouch() {
     if (this.mode === 'crouch') {
       this.mode = 'standing';
@@ -176,10 +188,15 @@ export class Player {
       if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) move.z += 1;
       if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) move.x -= 1;
       if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) move.x += 1;
-      if (move.lengthSq() > 0) {
+      const moving = move.lengthSq() > 0;
+      const wantSprint = moving && (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) && this.mode !== 'crouch' && this.stamina > 2;
+      // stamina drains while sprinting, regenerates otherwise
+      this.stamina = clamp(this.stamina + (wantSprint ? -32 : 18) * dt, 0, 100);
+      this.sprinting = wantSprint;
+      if (moving) {
         if (this.mode === 'seated') this.standUp();
         move.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
-        const speed = (this.mode === 'crouch' ? 1.4 : this.keys.has('ShiftLeft') ? 5 : 3) * dt;
+        const speed = (this.mode === 'crouch' ? 1.4 : wantSprint ? 5.2 : 3) * dt;
         const nx = this.pos.clone().add(new THREE.Vector3(move.x * speed, 0, 0));
         if (!this.collide(nx)) this.pos.x = nx.x;
         const nz = this.pos.clone().add(new THREE.Vector3(0, 0, move.z * speed));
@@ -194,9 +211,15 @@ export class Player {
         }
       }
     }
+    // jump arc (the camera is a floating eye; apply a simple ballistic offset)
+    if (this.jumpVel !== 0 || this.jumpOff > 0) {
+      this.jumpVel -= 11 * dt;
+      this.jumpOff = Math.max(0, this.jumpOff + this.jumpVel * dt);
+      if (this.jumpOff === 0) this.jumpVel = 0;
+    }
     const wantEye = EYE[this.mode];
     this.eye += (wantEye - this.eye) * Math.min(1, dt * 8);
-    this.camera.position.set(this.pos.x, this.eye, this.pos.z);
+    this.camera.position.set(this.pos.x, this.eye + this.jumpOff, this.pos.z);
     this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
 
     if (this.enabled) this.updateTarget();
