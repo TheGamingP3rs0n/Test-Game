@@ -29,6 +29,8 @@ export class Player {
     this.stamina = 100;
     this.jumpOff = 0;
     this.jumpVel = 0;
+    this.zone = null; // current no-call zone: 'break' | 'restroom' | null
+    this.seatExit = null;
     this.bindInput();
   }
 
@@ -122,14 +124,34 @@ export class Player {
     this.pitch = -0.12;
     this.mode = 'seated';
     this.hidden = false;
+    this.seatExit = new THREE.Vector3(0, 0, 0.4); // stand up backward, away from the desk
+    bus.emit('player:mode', this.mode);
+  }
+
+  /** Sit on a break-room seat (or a toilet). yaw is the facing while seated. */
+  sitAt(pos, yaw) {
+    this.pos.set(pos.x, 0, pos.z);
+    this.seatYaw = yaw;
+    this.yaw = yaw;
+    this.pitch = -0.05;
+    this.mode = 'seated';
+    this.hidden = false;
+    // step forward (where we're facing — placed to be open floor) when standing up
+    this.seatExit = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)).multiplyScalar(0.55);
     bus.emit('player:mode', this.mode);
   }
 
   standUp() {
     if (this.mode === 'standing') return;
-    if (this.mode === 'seated') this.pos.z += 0.35;
+    if (this.mode === 'seated') {
+      const exit = this.seatExit || new THREE.Vector3(0, 0, 0.35);
+      const t = this.pos.clone().add(exit);
+      if (!this.collide(t)) this.pos.copy(t);
+      else { const alt = this.pos.clone().add(new THREE.Vector3(0, 0, 0.35)); if (!this.collide(alt)) this.pos.copy(alt); }
+    }
     this.mode = 'standing';
     this.hidden = false;
+    this.seatExit = null;
     bus.emit('player:mode', this.mode);
   }
 
@@ -222,7 +244,11 @@ export class Player {
     this.camera.position.set(this.pos.x, this.eye + this.jumpOff, this.pos.z);
     this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
 
-    if (this.enabled) this.updateTarget();
+    if (this.enabled) {
+      this.updateTarget();
+      const zone = this.office.zoneAt(this.pos);
+      if (zone !== this.zone) { this.zone = zone; bus.emit('player:zone', zone); }
+    }
   }
 
   updateTarget() {

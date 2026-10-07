@@ -181,6 +181,8 @@ body.pc-open .clock-out, body.voting .clock-out { display: none !important; }
 .tool-slot .tool-qty { position: absolute; bottom: 1px; right: 4px; font-size: 10px; font-weight: 800; color: var(--fg); }
 body.pc-open .hud-toolbar, body.voting .hud-toolbar { display: none !important; }
 .hidden-indicator { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); background: rgba(31,157,76,.9); padding: 7px 16px; border-radius: 999px; font-weight: 900; display: flex; gap: 8px; align-items: center; }
+.break-indicator { position: absolute; left: 50%; top: 84px; transform: translateX(-50%); background: rgba(40,110,180,.92); color: #fff; padding: 7px 16px; border-radius: 999px; font-weight: 900; display: flex; gap: 8px; align-items: center; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+.break-indicator .ico { width: 18px; height: 18px; }
 
 /* ------------------------------------------------------------------ notifications */
 .toasts { position: absolute; left: 14px; top: 212px; display: flex; flex-direction: column; gap: 10px; width: min(400px, 80vw); }

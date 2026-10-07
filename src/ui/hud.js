@@ -36,13 +36,14 @@ export class HUD {
     this.hint = el('div.hint');
     this.lookHint = el('div.look-hint', { style: { display: 'none' } }, icon('mouse'), 'Click to look around');
     this.hiddenTag = el('div.hidden-indicator', { style: { display: 'none' } }, icon('hidden'), 'HIDDEN UNDER DESK');
+    this.breakTag = el('div.break-indicator', { style: { display: 'none' } }, icon('chai'), 'ON BREAK — NO CALLS');
     this.staminaBar = el('div', { style: { width: '100%' } });
     this.stamina = el('div.stamina', { style: { display: 'none' } }, icon('run'), el('div.bar', this.staminaBar));
     this.equipped = null; // id of the physical tool currently held (Scamazon "personal safety")
     this.toolbar = el('div.hud-toolbar', { style: { display: 'none' } });
     this.vignette = el('div.vignette');
     this.clockOut = el('button.clock-out', { style: { display: 'none' }, onclick: () => this.game.clockOut() }, icon('door'), el('span', 'Clock Out'), el('small', 'Quota met — end the day'));
-    this.node.append(this.vignette, this.status, this.practice, this.crosshair, this.prompt, this.banner, this.subtitles, this.hint, this.lookHint, this.hiddenTag, this.clockOut, this.stamina, this.toolbar);
+    this.node.append(this.vignette, this.status, this.practice, this.crosshair, this.prompt, this.banner, this.subtitles, this.hint, this.lookHint, this.hiddenTag, this.breakTag, this.clockOut, this.stamina, this.toolbar);
     root.append(this.node);
     this.show(false);
     this.bind();
@@ -58,6 +59,10 @@ export class HUD {
       } else this.prompt.style.display = 'none';
     });
     bus.on('player:hidden', (h) => (this.hiddenTag.style.display = h ? '' : 'none'));
+    bus.on('player:zone', (z) => {
+      this.breakTag.style.display = z ? '' : 'none';
+      if (z) this.breakTag.lastChild.textContent = z === 'restroom' ? 'IN THE RESTROOM — NO CALLS' : 'ON BREAK — NO CALLS';
+    });
     for (const e of ['player:mode', 'player:lock', 'call:ring', 'call:start', 'call:end', 'call:missed']) bus.on(e, () => this.renderHint());
     bus.on('chaos:start', ({ message, type }) => {
       this.banner.style.display = '';

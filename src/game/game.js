@@ -125,8 +125,9 @@ export const game = {
     if (this.phase === 'practice') return;
     this.clock += dt * this.minutesPerSecond;
     this.chaos.update(dt);
-    // schedule calls
-    if (this.calls.state === 'idle' && !this.powerOut) {
+    // schedule calls — but the phone stays quiet while you're in the break room / restroom
+    const onBreak = !!world.player?.zone;
+    if (this.calls.state === 'idle' && !this.powerOut && !onBreak) {
       this.nextCallIn -= dt;
       if (this.nextCallIn <= 0 && this.clock < this.dayEnd - 12) this.ringNext();
     }
@@ -507,6 +508,15 @@ export const game = {
       case 'cow':
         return say('Moo.', 'cow');
       default:
+        if (id && id.startsWith('sit:')) {
+          const s = world.office.sitSpots[id];
+          if (s) {
+            world.player.sitAt(s.pos, s.yaw);
+            sfx('click');
+            bus.emit('toast', { kind: 'info', icon: 'chai', title: 'On a break', text: 'No calls will come while you sit here. Press WASD to get up.', ms: 3200 });
+          }
+          return undefined;
+        }
         return undefined;
     }
   },
