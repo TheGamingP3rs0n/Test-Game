@@ -11,11 +11,15 @@ import {
   signTexture, canvasTexture, terrazzoMaps, dropCeilingTexture, clockTexture, drawClock, founderPortraitTexture, exitSignTexture,
 } from './textures.js';
 import { pick } from '../core/util.js';
+import { drawIcon } from '../ui/icons.js';
 
 export const ROOM = { minX: -9, maxX: 9, minZ: -6, maxZ: 6, height: 2.9 };
 const ROW_Z = [-3.2, -0.4, 2.4];
 const DESK_X = [-6.8, -5.2, -3.6, -2.0, -0.4];
 export const PLAYER_DESK = { x: -2.0, z: 2.4 };
+/** Coworkers at their desks. Kept low (and away from your desk) so the floor doesn't feel crowded. */
+const COWORKER_COUNT = 4;
+const SCREEN = { w: 0.744, h: 0.454, y: 0.343, z: 0.006, tilt: -0.1405 };
 
 const FURNITURE = [
   'desk', 'chairDesk', 'computerScreen', 'computerKeyboard', 'computerMouse', 'wall', 'wallWindow', 'wallDoorway',
@@ -71,23 +75,22 @@ export class Office {
     this.lastClockMinute = -1;
   }
 
-  async build(onProgress) {
+  async build(onProgress = () => {}) {
     await preload([
       ...FURNITURE.map((n) => ['furniture', n]),
-      ...[CHARACTERS.boss, CHARACTERS.police, ...CHARACTERS.coworkers].map((n) => ['characters', n]),
+      ...[CHARACTERS.boss, CHARACTERS.police, ...CHARACTERS.coworkers.slice(0, COWORKER_COUNT)].map((n) => ['characters', n]),
       ['vehicles', 'police'], ['vehicles', 'taxi'], ['vehicles', 'van'], ['animals', 'animal-cow'], ['food', 'cup-tea'], ['food', 'pizza-box'], ['food', 'mug'],
-    ], onProgress);
-
-    this.buildShell();
-    this.buildOutside();
-    await this.buildWalls();
-    this.buildLights();
-    await this.buildDesks();
-    await this.buildKitchen();
-    await this.buildBossOffice();
-    await this.buildProps();
-    await this.buildDecor();
-    await this.buildCharacters();
+    ], (p) => onProgress(p * 0.6));
+    // build in steps, letting the browser breathe (and the loading bar move) in between
+    const steps = [
+      () => this.buildShell(), () => this.buildOutside(), () => this.buildWalls(), () => this.buildLights(), () => this.buildDesks(),
+      () => this.buildKitchen(), () => this.buildBossOffice(), () => this.buildProps(), () => this.buildDecor(), () => this.buildCharacters(),
+    ];
+    for (let i = 0; i < steps.length; i++) {
+      await steps[i]();
+      onProgress(0.6 + ((i + 1) / steps.length) * 0.4);
+      await new Promise((r) => setTimeout(r, 0));
+    }
   }
 
   // ---------------------------------------------------------------- structure
@@ -213,7 +216,8 @@ export class Office {
       this.root.add(tube);
     }
     // our building's outer shell
-    box(18.2, 0.5, 12.1, M.matte(0x8a7f6c), [0, ROOM.height + 0.25, 0], this.root);
+    // roof slab: starts 3cm above the ceiling tiles (it used to sit exactly on them and z-fight)
+    box(18.4, 0.5, 12.4, M.matte(0x8a7f6c), [0, ROOM.height + 0.03 + 0.25, 0], this.root);
     box(20, 3.2, 14, M.matte(0x8a7f6c), [0, -1.61, 0], this.root, { cast: false });
   }
 
@@ -329,16 +333,20 @@ export class Office {
           new THREE.Vector3(x + 0.05, 0.9, z - 0.2), new THREE.Vector3(x + 0.1, 0.78, z - 0.36), new THREE.Vector3(x + 0.2, 0.3, z - 0.38), new THREE.Vector3(x + 0.3, 0.01, z - 0.3),
         ]), 16, 0.008, 5), cableMat);
         this.root.add(cable);
+        // The display covers the monitor's light-grey panel exactly: Kenney's panel is
+        // 0.758 x 0.467 m (at furniture scale), centred 0.343 m above the desk and tilted
+        // back ~8 degrees.
         const tex = screenTexture(isPlayer ? 'desktop' : 'coworker');
-        const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 0.42), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
-        screen.position.set(x, 0.76 + 0.33, z - 0.07);
+        const screen = new THREE.Mesh(new THREE.PlaneGeometry(SCREEN.w, SCREEN.h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+        screen.position.set(x, 0.76 + SCREEN.y, z - 0.12 + SCREEN.z);
+        screen.rotation.x = SCREEN.tilt;
         this.root.add(screen);
         this.colliders.push({ minX: x - 0.75, maxX: x + 0.75, minZ: z - 0.45, maxZ: z + 0.4 });
         if (isPlayer) {
           this.playerScreen = tex;
           this.playerScreenMesh = screen;
           this.playerSeat = { pos: new THREE.Vector3(x, 0, z + 0.85), yaw: 0 };
-          this.monitorView = { pos: new THREE.Vector3(x, 1.12, z + 0.42), target: new THREE.Vector3(x, 1.08, z - 0.07) };
+          this.monitorView = { pos: new THREE.Vector3(x, 1.16, z + 0.46), target: new THREE.Vector3(x, 0.76 + SCREEN.y, z - 0.12) };
           this.playerChair = chair;
           await this.buildPlayerDeskExtras(x, z);
           this.register({ id: 'computer', object: screen, label: 'Use computer', radius: 2.2 });
@@ -523,7 +531,8 @@ export class Office {
       ctx.fillStyle = '#000';
       ctx.font = 'bold 18px Inter, Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('⚡ BREAKERS', 64, 31);
+      ctx.fillText('BREAKERS', 70, 31);
+      drawIcon(ctx, 'zap', 6, 12, 20, '#000', 2.6);
     }) }));
     warn.position.set(0.07, 0.45, 0);
     warn.rotation.y = Math.PI / 2;
@@ -576,7 +585,8 @@ export class Office {
       ctx.fillStyle = '#c00';
       ctx.font = 'bold 26px Inter, Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('SUPPLIES 🎧', 128, 38);
+      ctx.fillText('SUPPLIES', 112, 38);
+      drawIcon(ctx, 'headphones', 178, 12, 30, '#c00', 2.6);
     }) }));
     supLabel.position.set(1.6, 1.75, ROOM.maxZ - 0.52);
     supLabel.rotation.y = Math.PI;
@@ -612,23 +622,34 @@ export class Office {
 
     // ceiling fans on downrods
     const rodMat = M.metal(0xe8e8e0, 0.3);
-    for (const [x, z] of [[-7.0, -1.6], [-3.6, -1.6], [-0.2, -1.6], [-7.0, 1.2], [-3.6, 1.2], [-0.2, 1.2], [5.2, -3.3]]) {
-      const y = ROOM.height - 0.62;
-      const fan = pivot(await instance('furniture', 'ceilingFan', { scale: 2.6 }), { x, y, z });
+    // Kenney's fan has its hub at the model origin (its bounding box is lopsided because
+    // of the blade angles), so we spin it around the origin — centring the bbox made the
+    // fans wobble around an off-axis point.
+    const FAN_SCALE = 2.6;
+    const hubTop = ROOM.height - 0.32; // where the rod meets the motor housing
+    for (const [x, z] of [[-5.6, -1.6], [-1.6, -1.6], [-5.6, 1.2], [-1.6, 1.2], [5.6, -3.4]]) {
+      const fan = new THREE.Group();
+      const model = await instance('furniture', 'ceilingFan', { scale: FAN_SCALE });
+      fan.add(model);
+      fan.position.set(x, hubTop, z);
+      fan.rotation.y = Math.random() * Math.PI * 2;
       this.root.add(fan);
       this.fans.push(fan);
-      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.3, 8), rodMat);
-      rod.position.set(x, ROOM.height - 0.15, z);
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, ROOM.height - hubTop + 0.01, 10), rodMat);
+      rod.position.set(x, (ROOM.height + hubTop) / 2, z);
       this.root.add(rod);
+      const canopy = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, 0.05, 16), rodMat);
+      canopy.position.set(x, ROOM.height - 0.025, z);
+      this.root.add(canopy);
     }
 
     // posters
     const posters = [
-      { title: 'SMILE AND DIAL', sub: 'They can hear your smile', emoji: '😁', bg: '#1f9d4c' },
-      { title: 'QUOTA IS LIFE', sub: '— Mr. Chatterjee', emoji: '💰', bg: '#b3261e' },
-      { title: 'GIFT CARDS ARE FOREVER', sub: 'Google Play • iTunes • Steam', emoji: '🎁', bg: '#2a4d9b' },
-      { title: 'NEVER SAY "SCAM"', sub: 'Say "service"', emoji: '🤫', bg: '#6a1b9a' },
-      { title: 'EMPLOYEE OF THE MONTH', sub: 'Rajesh (the koi fish)', emoji: '🐟', bg: '#c77700' },
+      { title: 'SMILE AND DIAL', sub: 'They can hear your smile', icon: 'smile', bg: '#1f9d4c' },
+      { title: 'QUOTA IS LIFE', sub: '— Mr. Chatterjee', icon: 'money', bg: '#b3261e' },
+      { title: 'GIFT CARDS ARE FOREVER', sub: 'Google Play • iTunes • Steam', icon: 'gift', bg: '#2a4d9b' },
+      { title: 'NEVER SAY "SCAM"', sub: 'Say "service"', icon: 'hidden', bg: '#6a1b9a' },
+      { title: 'EMPLOYEE OF THE MONTH', sub: 'Rajesh (the koi fish)', icon: 'fish', bg: '#c77700' },
     ];
     const spots = [
       { x: -2.5, y: 1.65, z: ROOM.maxZ - 0.06, r: Math.PI },
@@ -775,9 +796,10 @@ export class Office {
 
   async buildCharacters() {
     const names = [...CHARACTERS.coworkers];
-    const seatOrder = [0, 2, 3, 5, 6, 8, 10, 12, 13].map((i) => this.seats[i]).filter(Boolean);
+    // seats: 0-4 front row, 5-9 middle row, 10-13 back row (yours is between 12 and 13)
+    const seatOrder = [1, 4, 6, 10].map((i) => this.seats[i]).filter(Boolean);
     const lines = ['Hello sir, I am calling from Windoze.', "Please do the needful ma'am.", 'Your computer is having virus!', 'Google Play card sir, Google Play!', 'Yes yes, I am Kevin from Texas.', 'Sir do not hang up sir!', 'Madam please open the black window.'];
-    for (let i = 0; i < Math.min(8, seatOrder.length); i++) {
+    for (let i = 0; i < Math.min(COWORKER_COUNT, seatOrder.length); i++) {
       const seat = seatOrder[i];
       const npc = await NPC.create('characters', names[i % names.length]);
       npc.root.position.set(seat.x, 0.32, seat.z - 0.08);
@@ -937,14 +959,15 @@ export class Office {
   // ------------------------------------------------------------------ per-frame
   update(dt) {
     this.time += dt;
-    const fanSpeed = this.powered ? 6 : 0.3;
-    for (const f of this.fans) f.rotation.y += dt * fanSpeed;
+    const want = this.powered ? 4.2 : 0;
+    this.fanSpeed = (this.fanSpeed ?? want) + (want - (this.fanSpeed ?? want)) * Math.min(1, dt * 0.6);
+    for (const f of this.fans) f.rotation.y += dt * this.fanSpeed;
     for (const n of this.npcs) n.update(dt);
     for (const c of this.coworkers) {
       c.chatter -= dt;
       if (c.chatter <= 0 && this.powered) {
-        c.chatter = 8 + Math.random() * 18;
-        if (Math.random() < 0.55) c.say(pick(c.lines), 3.5);
+        c.chatter = 14 + Math.random() * 22;
+        if (Math.random() < 0.4) c.say(pick(c.lines), 3.5);
       }
       if (c.head) c.head.rotation.y = Math.sin(this.time * 0.7 + c.seat.slot) * 0.25;
     }

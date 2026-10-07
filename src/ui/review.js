@@ -1,5 +1,5 @@
 // End-of-day performance review in the boss's office.
-import { el, money, sleep } from '../core/util.js';
+import { el, setText, money, sleep } from '../core/util.js';
 import { bus } from '../core/bus.js';
 import { sfx, unlockAudio } from '../core/audio.js';
 import { BOSS, bossReview, bossExcuse } from '../ai/bossBrain.js';
@@ -90,17 +90,17 @@ export function showReview(screens, game, report) {
       unlockAudio();
       try {
         micHeld = true;
-        mic.textContent = '🔴 Listening…';
+        setText(mic, '🔴 Listening…');
         await voiceInput.begin();
       } catch (err) {
         micHeld = false;
-        mic.textContent = '🎙️ Hold';
+        setText(mic, '🎙️ Hold');
         bus.emit('toast', { kind: 'warn', text: err.message });
       }
     }, onmouseup: async () => {
       if (!micHeld) return;
       micHeld = false;
-      mic.textContent = '🎙️ Hold';
+      setText(mic, '🎙️ Hold');
       const t = await voiceInput.end('Talking to an angry boss about the daily quota.').catch(() => '');
       if (t) respond(t);
     } }, '🎙️ Hold');

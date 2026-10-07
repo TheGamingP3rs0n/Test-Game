@@ -8,6 +8,7 @@ import '@fontsource/inter/900.css';
 import '@fontsource/vt323';
 import '@fontsource/permanent-marker';
 import './styles.css';
+import './ui/icons.js';
 
 import { world } from './world/world.js';
 import { game } from './game/game.js';
@@ -25,6 +26,7 @@ import { showShop } from './ui/shop.js';
 import { bindChatStore } from './ui/os/apps.js';
 import { bus } from './core/bus.js';
 import { unlockAudio } from './core/audio.js';
+import { music } from './core/music.js';
 import { typingInField, clockText, el } from './core/util.js';
 import { settings } from './core/store.js';
 
@@ -44,8 +46,8 @@ async function boot() {
   loading.progress(0.05, 'Loading callers, scams and mods…');
   await loadContent();
   loading.progress(0.1, 'Building the office…');
-  await world.init(canvas, (p) => loading.progress(0.1 + p * 0.8, `Loading 3D models… ${Math.round(p * 100)}%`));
-  loading.progress(1, 'Baking lights…');
+  await world.init(canvas, (p, label) => loading.progress(0.1 + p * 0.9, label));
+  loading.progress(1, 'Ready');
 
   game.init();
   const hud = new HUD(ui, game);
@@ -60,11 +62,14 @@ async function boot() {
       game.startPractice(def);
     },
   });
-  const showMenu = () => screens.menu({
-    onSettings: () => openSettings({ onClose: () => game.phase === 'menu' && showMenu() }),
-    onClients: openMaker,
-    onMods: () => openMods({ onClose: () => game.phase === 'menu' && showMenu() }),
-  });
+  const showMenu = () => {
+    music.play('menu');
+    screens.menu({
+      onSettings: () => openSettings({ onClose: () => game.phase === 'menu' && showMenu() }),
+      onClients: openMaker,
+      onMods: () => openMods({ onClose: () => game.phase === 'menu' && showMenu() }),
+    });
+  };
 
   game.ui = {
     showMenu,
@@ -77,7 +82,8 @@ async function boot() {
     showReview: (report) => showReview(screens, game, report),
     showShop: (run, commission) => showShop(screens, game, run, commission),
     showGameOver: (run, report) => screens.gameOver(run, report),
-    showPause: () => screens.pause({ onSettings: () => openSettings() }),
+    showPause: () => screens.pause({ onSettings: () => openSettings(), hud }),
+    hidePause: () => screens.hidePause(),
     openComputer: () => {
       computer.open();
       hud.setComputerMode(true);
@@ -99,9 +105,20 @@ async function boot() {
     ui.append(f);
     setTimeout(() => f.remove(), 700);
   });
-  bus.on('ai:error', (err) => {
-    if (err.status === 401) toast('🔑 Groq rejected your API key. Check it in Settings.', 'bad', 6000);
+  // big green +$ money popup (juice)
+  bus.on('money:popup', ({ amount }) => {
+    if (!amount) return;
+    const pop = el('div.money-pop', `+$${Math.abs(Math.round(amount)).toLocaleString()}`);
+    ui.append(pop);
+    setTimeout(() => pop.remove(), 1500);
   });
+  bus.on('ai:error', (err) => {
+    if (err.status === 401) toast('Groq rejected your API key. Check it in Settings.', 'bad', 6000, { icon: 'key', title: 'API key problem' });
+  });
+  // music: quieter under calls, normal otherwise
+  bus.on('call:start', () => music.setDuck(0.3));
+  bus.on('call:end', () => music.setDuck(1));
+  bus.on('call:missed', () => music.setDuck(1));
 
   // per-frame UI sync (throttled)
   let acc = 0;
@@ -111,6 +128,7 @@ async function boot() {
     acc = 0;
     hud.update();
     computer.desktop?.setClock(game.clock);
+    if (game.day && game.phase === 'playing') computer.desktop?.setStatus({ earned: Math.max(0, game.day.earned), quota: game.day.quota });
     if (game.day && game.phase === 'playing') {
       world.office.updateBoard({
         day: game.day.day,
@@ -118,29 +136,34 @@ async function boot() {
         earned: Math.max(0, game.day.earned),
         quota: game.day.quota,
         calls: game.day.callsTaken,
-        alert: game.chaos.active ? game.chaos.active.def.name.toUpperCase() : game.calls.state === 'ringing' ? '📞 PHONE RINGING' : '',
+        alert: game.chaos.active ? game.chaos.active.def.name.toUpperCase() : game.calls.state === 'ringing' ? 'PHONE RINGING' : '',
       });
     }
   });
   const updateScreen = () => {
     if (game.powerOut) return;
-    if (game.calls.active) world.office.setPlayerScreen({ kind: 'desktop', text: `📞 ${game.calls.caller.name}`, trust: game.calls.conv.trust });
-    else if (game.calls.state === 'ringing') world.office.setPlayerScreen({ kind: 'desktop', text: '📞 INCOMING CALL!' });
+    if (game.calls.active) world.office.setPlayerScreen({ kind: 'desktop', text: game.calls.caller.name, trust: game.calls.conv.trust });
+    else if (game.calls.state === 'ringing') world.office.setPlayerScreen({ kind: 'desktop', text: 'INCOMING CALL', ringing: true });
     else world.office.setPlayerScreen({ kind: game.virus ? 'virus' : 'desktop' });
   };
   ['call:ring', 'call:start', 'call:update', 'call:end', 'call:missed', 'computer:virus', 'computer:power'].forEach((e) => bus.on(e, updateScreen));
 
-  // keyboard
+  // keyboard: ONE press of Esc pauses. (While the mouse is captured the browser keeps
+  // the Esc key to itself and just releases the mouse — so losing the mouse capture
+  // during play is treated as that Esc press.)
+  const canPause = () => game.playing && !game.paused && !document.querySelector('.modal-back') && !document.querySelector('.screen:not(.pause-screen)');
   document.addEventListener('keydown', (e) => {
-    if (typingInField()) return;
     if (e.code === 'Escape') {
       if (document.querySelector('.modal-back')) return;
-      if (game.computerOpen) game.closeComputer();
-      else if (game.paused) {
-        screens.hide();
-        game.resume();
-      } else if (game.playing && !document.querySelector('.screen')) game.pause();
+      if (typingInField()) {
+        document.activeElement.blur();
+        return;
+      }
+      if (game.paused) game.resume();
+      else if (canPause()) game.pause();
+      return;
     }
+    if (typingInField()) return;
     if (e.code === 'Tab' && game.playing && !game.paused) {
       e.preventDefault();
       if (game.computerOpen) game.closeComputer();
@@ -150,12 +173,20 @@ async function boot() {
         if (Math.hypot(p.x - seat.x, p.z - seat.z) < 2.6) {
           if (world.player.mode !== 'seated') world.player.sitAtDesk();
           game.openComputer();
-        } else toast('🖥️ Walk back to your desk to use your computer.');
+        } else toast('Walk back to your desk to use your computer.', 'info', 3000, { icon: 'monitor' });
       }
     }
   });
-  window.addEventListener('pointerdown', unlockAudio, { once: true });
-  window.addEventListener('keydown', unlockAudio, { once: true });
+  bus.on('player:lock', (locked, info = {}) => {
+    if (!locked && info.lost && world.mode === 'play' && canPause()) game.pause();
+  });
+  // browsers only allow sound after a click/keypress
+  const firstGesture = () => {
+    unlockAudio();
+    if (game.phase === 'menu') music.play('menu');
+  };
+  window.addEventListener('pointerdown', firstGesture, { once: true });
+  window.addEventListener('keydown', firstGesture, { once: true });
 
   // handy for debugging from the browser console
   window.__game = game;

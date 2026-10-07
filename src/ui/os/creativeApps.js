@@ -1,6 +1,6 @@
 // Creative tools: Paint, Camera, Screen Recorder, DocForge (fake documents),
 // SiteForge (fake websites). Things you make can be shown to the caller, who reacts.
-import { el, money, downloadBlob, escapeHtml, uid } from '../../core/util.js';
+import { el, setText, money, downloadBlob, escapeHtml, uid } from '../../core/util.js';
 import { bus } from '../../core/bus.js';
 import { sfx } from '../../core/audio.js';
 import { promptDialog } from '../dialog.js';
@@ -192,7 +192,7 @@ export function recorderApp(game, win) {
     rec.start(500);
     startBtn.disabled = true;
     stopBtn.disabled = false;
-    status.textContent = '🔴 Recording…';
+    setText(status, '🔴 Recording…');
     bus.emit('recorder', true);
   };
   const stop = () => {

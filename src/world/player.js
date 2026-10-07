@@ -31,8 +31,17 @@ export class Player {
 
   bindInput() {
     document.addEventListener('pointerlockchange', () => {
+      const was = this.locked;
       this.locked = document.pointerLockElement === this.canvas;
-      bus.emit('player:lock', this.locked);
+      // Lost the lock without us asking = the browser ate an Esc press (it always
+      // releases the mouse on Esc). The game treats that as "pause".
+      const intentional = this.releasing;
+      this.releasing = false;
+      bus.emit('player:lock', this.locked, { lost: was && !this.locked && !intentional });
+    });
+    document.addEventListener('pointerlockerror', () => {
+      this.releasing = false;
+      bus.emit('player:lock', false, { error: true });
     });
     document.addEventListener('mousemove', (e) => {
       if (!this.enabled) return;
@@ -67,16 +76,27 @@ export class Player {
   }
 
   requestLock() {
+    if (document.pointerLockElement === this.canvas) return;
     try {
-      const p = this.canvas.requestPointerLock?.();
-      p?.catch?.(() => {});
+      // unadjustedMovement = raw mouse input (no OS acceleration) where supported
+      const p = this.canvas.requestPointerLock?.({ unadjustedMovement: true });
+      p?.catch?.(() => {
+        try {
+          this.canvas.requestPointerLock?.()?.catch?.(() => {});
+        } catch {
+          /* drag-to-look fallback */
+        }
+      });
     } catch {
       /* not supported (e.g. headless) — drag-to-look fallback */
     }
   }
 
   releaseLock() {
-    if (document.pointerLockElement) document.exitPointerLock();
+    if (document.pointerLockElement) {
+      this.releasing = true;
+      document.exitPointerLock();
+    }
   }
 
   setEnabled(on) {

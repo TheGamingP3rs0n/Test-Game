@@ -4,15 +4,33 @@
 import { settings } from './store.js';
 import { bus } from './bus.js';
 
-let ctx = null;
+let ctx = null; // game world: sfx, voices, ambience, alarms — suspended while paused
+let uiCtx = null; // menus + music — keeps running while paused
 const buses = {};
+const uiBuses = {};
 let voiceAnalyser = null;
 let noiseBuffer = null;
+let uiNoise = null;
 const loops = new Map();
+let gamePaused = false;
 
 export function audioCtx() {
   if (!ctx) init();
   return ctx;
+}
+
+/** Context for menu sounds and music (never paused). */
+export function uiAudioCtx() {
+  if (!uiCtx) initUI();
+  return uiCtx;
+}
+export const uiAudioBuses = uiBuses;
+
+function makeNoise(c) {
+  const b = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+  const d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return b;
 }
 
 function init() {
@@ -28,25 +46,56 @@ function init() {
   voiceAnalyser = ctx.createAnalyser();
   voiceAnalyser.fftSize = 256;
   buses.voice.connect(voiceAnalyser);
-  noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
-  const d = noiseBuffer.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  noiseBuffer = makeNoise(ctx);
+  applyVolumes();
+}
+
+function initUI() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  uiCtx = new AC();
+  uiBuses.master = uiCtx.createGain();
+  uiBuses.master.connect(uiCtx.destination);
+  uiBuses.sfx = uiCtx.createGain();
+  uiBuses.sfx.connect(uiBuses.master);
+  uiBuses.music = uiCtx.createGain();
+  uiBuses.music.connect(uiBuses.master);
+  uiNoise = makeNoise(uiCtx);
   applyVolumes();
 }
 
 function applyVolumes() {
-  if (!ctx) return;
-  buses.master.gain.value = settings.masterVolume;
-  buses.sfx.gain.value = settings.sfxVolume;
-  buses.voice.gain.value = settings.voiceVolume;
-  buses.amb.gain.value = settings.ambienceVolume;
+  if (ctx) {
+    buses.master.gain.value = settings.masterVolume;
+    buses.sfx.gain.value = settings.sfxVolume;
+    buses.voice.gain.value = settings.voiceVolume;
+    buses.amb.gain.value = settings.ambienceVolume;
+  }
+  if (uiCtx) {
+    uiBuses.master.gain.value = settings.masterVolume;
+    uiBuses.sfx.gain.value = settings.sfxVolume;
+    uiBuses.music.gain.value = settings.musicVolume ?? 0.5;
+  }
 }
 bus.on('settings:changed', applyVolumes);
 
 /** Must be called from a user gesture at least once (browser autoplay rules). */
 export function unlockAudio() {
   audioCtx();
-  if (ctx && ctx.state === 'suspended') ctx.resume();
+  uiAudioCtx();
+  if (ctx && ctx.state === 'suspended' && !gamePaused) ctx.resume();
+  if (uiCtx && uiCtx.state === 'suspended') uiCtx.resume();
+}
+
+/** Freeze every game sound (ringing phone, voices, sirens) exactly where it is. */
+export function pauseGameAudio() {
+  gamePaused = true;
+  ctx?.suspend();
+}
+
+export function resumeGameAudio() {
+  gamePaused = false;
+  ctx?.resume();
 }
 
 export function voiceLevel() {
@@ -58,9 +107,23 @@ export function voiceLevel() {
   return Math.sqrt(sum / arr.length);
 }
 
+// Synthesis primitives write to the "current target" so the same recipes can play on
+// the game context or the UI context.
+let T = { c: null, b: buses, n: null };
+function target(ui) {
+  if (ui) {
+    uiAudioCtx();
+    T = { c: uiCtx, b: uiBuses, n: uiNoise };
+  } else {
+    audioCtx();
+    T = { c: ctx, b: buses, n: noiseBuffer };
+  }
+  return T.c;
+}
+
 // ---------- synthesis primitives ----------
 function tone({ freq = 440, type = 'sine', start = 0, dur = 0.2, vol = 0.3, attack = 0.005, release = 0.05, glide = null, dest = 'sfx', detune = 0 }) {
-  const c = audioCtx();
+  const c = T.c;
   if (!c) return;
   const t0 = c.currentTime + start;
   const o = c.createOscillator();
@@ -73,18 +136,18 @@ function tone({ freq = 440, type = 'sine', start = 0, dur = 0.2, vol = 0.3, atta
   g.gain.exponentialRampToValueAtTime(vol, t0 + attack);
   g.gain.setValueAtTime(vol, t0 + Math.max(attack, dur - release));
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g).connect(typeof dest === 'string' ? buses[dest] : dest);
+  o.connect(g).connect(typeof dest === 'string' ? T.b[dest] || T.b.sfx : dest);
   o.start(t0);
   o.stop(t0 + dur + 0.05);
   return o;
 }
 
 function noise({ start = 0, dur = 0.3, vol = 0.3, filter = 'lowpass', freq = 1200, q = 1, sweepTo = null, dest = 'sfx' }) {
-  const c = audioCtx();
+  const c = T.c;
   if (!c) return;
   const t0 = c.currentTime + start;
   const src = c.createBufferSource();
-  src.buffer = noiseBuffer;
+  src.buffer = T.n;
   src.loop = true;
   const f = c.createBiquadFilter();
   f.type = filter;
@@ -94,12 +157,25 @@ function noise({ start = 0, dur = 0.3, vol = 0.3, filter = 'lowpass', freq = 120
   const g = c.createGain();
   g.gain.setValueAtTime(vol, t0);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  src.connect(f).connect(g).connect(buses[dest]);
+  src.connect(f).connect(g).connect(T.b[dest] || T.b.sfx);
   src.start(t0, Math.random());
   src.stop(t0 + dur + 0.05);
 }
 
 const SFX = {
+  micOn() {
+    noise({ dur: 0.04, vol: 0.18, filter: 'bandpass', freq: 3000, q: 2 });
+    tone({ freq: 1180, dur: 0.07, vol: 0.06, type: 'sine', start: 0.02 });
+  },
+  hover() {
+    tone({ freq: 1600, dur: 0.03, vol: 0.025, type: 'sine' });
+  },
+  pause() {
+    tone({ freq: 520, dur: 0.12, vol: 0.08, type: 'triangle', glide: 330 });
+  },
+  unpause() {
+    tone({ freq: 330, dur: 0.12, vol: 0.08, type: 'triangle', glide: 560 });
+  },
   ring() {
     for (let i = 0; i < 2; i++) {
       tone({ freq: 440, start: i * 0.5, dur: 0.4, vol: 0.12 });
@@ -191,12 +267,17 @@ const SFX = {
   },
 };
 
-export function sfx(name) {
+const UI_SFX = new Set(['click', 'hover', 'pause', 'unpause']);
+
+/** Play a sound. Menu sounds (and anything played while paused) use the UI context. */
+export function sfx(name, { ui = UI_SFX.has(name) || gamePaused } = {}) {
   try {
-    audioCtx();
+    if (!target(ui)) return;
     SFX[name]?.();
   } catch (err) {
     console.warn('sfx failed', name, err);
+  } finally {
+    T = { c: ctx, b: buses, n: noiseBuffer };
   }
 }
 
@@ -324,7 +405,7 @@ const LOOPS = {
 };
 
 export function startLoop(name, busName = 'sfx') {
-  const c = audioCtx();
+  const c = target(false);
   if (!c || loops.has(name)) return;
   try {
     loops.set(name, LOOPS[name](c, buses[busName]));

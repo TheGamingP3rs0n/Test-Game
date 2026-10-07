@@ -2,7 +2,7 @@
 // pictures per emotion), voice (Groq voice or your own WAV / recording + emotion
 // sound effects), personality, trust behavior, reactions — then test-call them.
 // Saved in IndexedDB; export/import as JSON (pictures & audio embedded as data URLs).
-import { el, uid, pickFile, blobToDataURL, downloadBlob, pick } from '../core/util.js';
+import { el, setText, uid, pickFile, blobToDataURL, downloadBlob, pick } from '../core/util.js';
 import { db } from '../core/db.js';
 import { content, normalizeCaller, loadContent } from '../game/content.js';
 import { avatarDataUri, PORTRAIT_EMOTIONS, AVATAR_OPTIONS, portraitFor } from './portraits.js';
@@ -182,13 +182,13 @@ export async function openClientMaker({ onClose, onTestCall } = {}) {
           const f = await pickFile('audio/*,.wav');
           if (!f) return;
           v.babble = await blobToDataURL(f);
-          babbleStatus.textContent = `✅ ${f.name}`;
+          setText(babbleStatus, `✅ ${f.name}`);
         } }, '📁 Upload WAV'),
         el('button.btn.small', { onclick: async () => {
           const url = await recordAudio(4000);
           if (url) {
             v.babble = url;
-            babbleStatus.textContent = '✅ recorded';
+            setText(babbleStatus, '✅ recorded');
           }
         } }, '🎙️ Record 4s'),
         babbleStatus), 'Your clip is chopped into syllables and pitch-shifted to "speak" every line (Animal Crossing style). Groq has no voice cloning, so this is how custom voices work.') : null,
@@ -211,13 +211,13 @@ export async function openClientMaker({ onClose, onTestCall } = {}) {
           const f = await pickFile('audio/*');
           if (!f) return;
           current.voice.sfx = { ...(current.voice.sfx || {}), [emo]: await blobToDataURL(f) };
-          status.textContent = '✅ set';
+          setText(status, '✅ set');
         } }, '📁'),
         el('button.btn.small', { onclick: async () => {
           const url = await recordAudio(2500);
           if (url) {
             current.voice.sfx = { ...(current.voice.sfx || {}), [emo]: url };
-            status.textContent = '✅ recorded';
+            setText(status, '✅ recorded');
           }
         } }, '🎙️'),
         el('button.btn.small', { onclick: () => current.voice.sfx?.[emo] && new Audio(current.voice.sfx[emo]).play() }, '▶'),

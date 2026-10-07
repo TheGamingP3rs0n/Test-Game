@@ -18,7 +18,9 @@ export const DEFAULT_SETTINGS = {
   voiceVolume: 1,
   sfxVolume: 0.7,
   ambienceVolume: 0.35,
-  dayLengthMinutes: 10,
+  musicVolume: 0.45,
+  dayLengthMinutes: 16,
+  fov: 80,
   mouseSensitivity: 1,
   showSubtitles: true,
   showCallerThoughts: true,
@@ -47,6 +49,13 @@ function save(key, value) {
 }
 
 export const settings = { ...DEFAULT_SETTINGS, ...load(SETTINGS_KEY, {}) };
+
+// v2: the old 10-minute default workday felt rushed — move untouched saves to the new default
+if ((settings.settingsVersion || 1) < 2) {
+  if (settings.dayLengthMinutes === 10) settings.dayLengthMinutes = DEFAULT_SETTINGS.dayLengthMinutes;
+  settings.settingsVersion = 2;
+  save(SETTINGS_KEY, settings);
+}
 
 export function updateSettings(patch) {
   Object.assign(settings, patch);

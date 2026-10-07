@@ -1,7 +1,8 @@
 // Settings: Groq API key + models, voice in/out, audio, gameplay, graphics.
-import { el } from '../core/util.js';
+import { el, setText } from '../core/util.js';
 import { settings, updateSettings, DEFAULT_SETTINGS, hasApiKey } from '../core/store.js';
-import { testKey, ALL_VOICES } from '../ai/groq.js';
+import { testKey, ALL_VOICES, usage, CHAT_FALLBACKS } from '../ai/groq.js';
+import { icon } from './icons.js';
 import { speaker } from '../ai/speech.js';
 import { modal, toast } from './dialog.js';
 import { QUALITY } from '../world/render.js';
@@ -11,8 +12,8 @@ export function openSettings({ onClose } = {}) {
   let tab = 'ai';
   const body = el('div');
   const tabs = el('div.tabs');
-  const tabList = [['ai', '🤖 AI & API key'], ['voice', '🎙️ Voice'], ['audio', '🔊 Audio'], ['game', '🎮 Gameplay'], ['graphics', '🖼️ Graphics']];
-  const renderTabs = () => tabs.replaceChildren(...tabList.map(([id, label]) => el(`div.tab${id === tab ? '.on' : ''}`, { onclick: () => ((tab = id), renderTabs(), render()) }, label)));
+  const tabList = [['ai', 'bot', 'AI & API key'], ['voice', 'mic', 'Voice'], ['audio', 'volume', 'Audio'], ['game', 'gamepad', 'Gameplay'], ['graphics', 'image', 'Graphics']];
+  const renderTabs = () => tabs.replaceChildren(...tabList.map(([id, ic, label]) => el(`div.tab${id === tab ? '.on' : ''}`, { onclick: () => ((tab = id), renderTabs(), render()) }, icon(ic), label)));
 
   const field = (label, input, help) => el('div.field', el('label', label), input, help ? el('div.help', help) : null);
   const text = (key, opts = {}) => el('input', { type: opts.type || 'text', value: settings[key] ?? '', placeholder: opts.placeholder || '', onchange: (e) => updateSettings({ [key]: e.target.value }), onkeydown: (e) => e.stopPropagation() });
@@ -26,7 +27,7 @@ export function openSettings({ onClose } = {}) {
 
   const render = () => {
     if (tab === 'ai') {
-      const status = el('div.muted', { style: { minHeight: '18px' } }, hasApiKey() ? '🔑 Key saved.' : 'No key yet — the game runs in offline mode.');
+      const status = el('div.muted', { style: { minHeight: '18px' } }, hasApiKey() ? 'Key saved.' : 'No key yet — the game runs in offline mode.');
       const key = el('input', { type: 'password', value: settings.apiKey, placeholder: 'gsk_...', autocomplete: 'off', onchange: (e) => updateSettings({ apiKey: e.target.value.trim() }), onkeydown: (e) => e.stopPropagation() });
       const show = el('button.btn.small.ghost', { onclick: () => (key.type = key.type === 'password' ? 'text' : 'password') }, '👁');
       body.replaceChildren(
@@ -40,9 +41,9 @@ export function openSettings({ onClose } = {}) {
               const models = await testKey();
               const need = [settings.chatModel, settings.ttsModel, settings.sttModel];
               const missing = need.filter((m) => !models.includes(m));
-              status.textContent = missing.length ? `✅ Key works, but your account can't see: ${missing.join(', ')}. (TTS may need accepting Orpheus terms in the Groq console playground.)` : '✅ Key works! All three models are available.';
+              setText(status, missing.length ? `✅ Key works, but your account can't see: ${missing.join(', ')}. (TTS may need accepting Orpheus terms in the Groq console playground.)` : '✅ Key works! All models are available.');
             } catch (err) {
-              status.textContent = `❌ ${err.message}`;
+              setText(status, `❌ ${err.message}`);
             }
           } }, 'Test key'),
           el('button.btn.small.ghost', { onclick: () => { updateSettings({ apiKey: '' }); key.value = ''; status.textContent = 'Key removed.'; } }, 'Remove key')),
@@ -52,6 +53,9 @@ export function openSettings({ onClose } = {}) {
         field('Text-to-speech', text('ttsModel'), 'canopylabs/orpheus-v1-english — Groq\'s TTS ($22 per 1M characters). Supports [vocal directions].'),
         field('Speech-to-text', text('sttModel'), 'whisper-large-v3 — Groq\'s most accurate Whisper ($0.111/hour). whisper-large-v3-turbo is cheaper ($0.04/hour).'),
         field('Caller creativity', range('aiCreativity', 0.2, 1.3, 0.05), 'Higher = more unhinged callers.'),
+        el('h3', 'Free tier'),
+        el('p.muted', { style: { fontSize: '13px' } }, `Groq's free tier allows only a few thousand tokens per minute per model, so the game keeps prompts short, paces requests, and switches to another free model (${CHAT_FALLBACKS.filter((m) => m !== settings.chatModel).join(', ')}) when one is busy. Free voices (Orpheus) have a small daily limit — after that, callers use your browser's voices.`),
+        el('div.usage', `This session: ${usage.chatCalls} AI replies • ${(usage.promptTokens + usage.completionTokens).toLocaleString()} tokens (${usage.cachedTokens.toLocaleString()} cached) • ${usage.ttsChars.toLocaleString()} voice chars • ${usage.rateLimited} rate-limit waits • ${usage.fallbacks} backup-model replies`),
         el('div.row', { style: { justifyContent: 'flex-end' } }, el('button.btn.small.ghost', { onclick: () => { updateSettings({ chatModel: DEFAULT_SETTINGS.chatModel, ttsModel: DEFAULT_SETTINGS.ttsModel, sttModel: DEFAULT_SETTINGS.sttModel }); render(); } }, 'Reset models to defaults')),
       );
     } else if (tab === 'voice') {
@@ -68,7 +72,7 @@ export function openSettings({ onClose } = {}) {
           }
         } }, '▶ Play'))),
         el('h3', 'Your voice (input)'),
-        field('Speech recognition', select('voiceInput', [['groq', 'Groq Whisper (best)'], ['browser', 'Browser speech recognition (Chrome/Edge)'], ['text', 'Type only (no microphone)']])),
+        field('Speech recognition', select('voiceInput', [['groq', 'Groq Whisper large-v3 (most accurate)'], ['browser', 'Browser recognition — free, live captions (Chrome/Edge)'], ['text', 'Type only (no microphone)']]), 'The mic only turns on while you hold push-to-talk. Wait for the little click before you start speaking. Browser recognition costs no Groq quota and shows your words live as you speak.'),
         field('Push-to-talk key', el('div.row', el('span.kbd', (settings.pttKey || 'KeyV').replace('Key', '')), el('button.btn.small', { onclick: (e) => {
           e.target.textContent = 'Press a key…';
           const h = (ev) => {
@@ -81,8 +85,9 @@ export function openSettings({ onClose } = {}) {
         } }, 'Change')), 'Hold it while talking. You can also hold the big mic button.'),
         field('Mic check', el('button.btn.small', { onclick: async () => {
           try {
-            await navigator.mediaDevices.getUserMedia({ audio: true });
-            toast('🎙️ Microphone OK!');
+            const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+            s.getTracks().forEach((t) => t.stop());
+            toast('Microphone works!', 'info', 3000, { icon: 'mic' });
           } catch (err) {
             toast(`Microphone blocked: ${err.message}`, 'bad');
           }
@@ -94,11 +99,13 @@ export function openSettings({ onClose } = {}) {
         field('Voices', range('voiceVolume', 0, 1.5)),
         field('Sound effects', range('sfxVolume', 0, 1)),
         field('Office ambience', range('ambienceVolume', 0, 1)),
-        el('button.btn.small', { onclick: () => (unlockAudio(), sfx('cash')) }, '🔊 Test sound'),
+        field('Music', range('musicVolume', 0, 1)),
+        el('button.btn.small', { onclick: () => (unlockAudio(), sfx('cash')) }, icon('volume'), 'Test sound'),
       );
     } else if (tab === 'game') {
       body.replaceChildren(
-        field('Workday length', range('dayLengthMinutes', 4, 25, 1), 'Real minutes per 9-to-5 shift. Longer = more calls per day.'),
+        field('Workday length', range('dayLengthMinutes', 6, 30, 1), 'Real minutes per 9-to-5 shift (default 16). Longer = a slower clock and more calls per day.'),
+        field('Field of view', range('fov', 60, 100, 1), 'Vertical field of view in degrees (default 80).'),
         field('Mouse sensitivity', range('mouseSensitivity', 0.2, 3, 0.1)),
         field('Your fake name', text('agentAlias'), 'What you call yourself on the phone (just for flavor).'),
         field('Subtitles', check('showSubtitles', 'Show caller subtitles in 3D view')),

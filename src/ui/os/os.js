@@ -1,14 +1,51 @@
 // A tiny desktop environment ("Windoze XD"): draggable windows, taskbar, start menu,
 // desktop icons, notifications. Used for your work PC and for victims' PCs.
-import { el, clamp, clockText } from '../../core/util.js';
+import { el, clamp, clockText, money } from '../../core/util.js';
 import { sfx } from '../../core/audio.js';
+import { icon, iconFor } from '../icons.js';
+import { APP_ICONS } from '../appIcons.js';
+
+/** Tile colours for app icons (anything else gets a hue from its name). */
+const TILE = {
+  phone: '#22a861', remote: '#2f6fe0', notes: '#e0a91b', browser: '#1d8fd6', cashier: '#1f9d4c', playbook: '#6b4fd8', messenger: '#14a3a3',
+  files: '#d98a1c', antivirus: '#c43b3b', recorder: '#d63a5a', paint: '#e0662b', camera: '#5b6573', docforge: '#4a6fa5', siteforge: '#8e44ad',
+  mycomputer: '#d98a1c', cmd: '#2b2f33', eventvwr: '#c9a227', notepad: '#5f87c9', recycle: '#6b7a86', obs: '#3a3f47', vbox: '#2f6fe0',
+};
+function tileColor(id = '') {
+  if (TILE[id]) return TILE[id];
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `hsl(${h} 55% 42%)`;
+}
+
+let svgUid = 0;
+/** Full-colour SVG for an app (gradient ids made unique per copy so hidden copies can't break visible ones). */
+function colorSvg(def) {
+  const n = ++svgUid;
+  const body = def.body.replace(/id="([^"]+)"/g, (m, id) => `id="${id}-${n}"`).replace(/url\(#([^)]+)\)/g, (m, id) => `url(#${id}-${n})`).replace(/href="#([^"]+)"/g, (m, id) => `href="#${id}-${n}"`);
+  const wrap = document.createElement('span');
+  wrap.className = 'color-ico';
+  wrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${def.w} ${def.h}" width="100%" height="100%" aria-hidden="true">${body}</svg>`;
+  return wrap;
+}
+
+/** App icon: a full-colour icon when we have one, else a coloured tile with a glyph. */
+export function appTile(app, size = 'md') {
+  const def = APP_ICONS[app.id];
+  if (def) return el(`span.app-icon.${size}`, colorSvg(def));
+  const tile = el(`span.app-tile.${size}`, icon(iconFor(app.icon, 'square')));
+  tile.style.setProperty('--tile', tileColor(app.id));
+  return tile;
+}
 
 let zTop = 10;
 
 export class Win {
-  constructor(desktop, { id, title, icon = '🗔', width = 560, height = 400, x, y, body, onClose, resizable = true, className = '' }) {
+  constructor(desktop, { id, appId = id, title, icon: appIcon = 'square', width = 560, height = 400, x, y, body, onClose, resizable = true, className = '' }) {
     this.desktop = desktop;
     this.id = id;
+    this.appId = appId;
+    this.appIcon = appIcon;
     this.onClose = onClose;
     const rect = desktop.root.getBoundingClientRect();
     const area = rect.width > 50 ? rect : { width: 1000, height: 640 };
@@ -21,10 +58,10 @@ export class Win {
     this.bodyEl = el(`div.win-body${className ? '.' + className : ''}`);
     this.node = el('div.win', { style: { width: W + 'px', height: H + 'px', left: left + 'px', top: top + 'px', resize: resizable ? 'both' : 'none' } },
       el('div.win-title', { onmousedown: (e) => this.startDrag(e), ondblclick: () => this.toggleMax() },
-        el('span', icon), this.titleEl,
-        el('button', { title: 'Minimize', onclick: (e) => (e.stopPropagation(), this.minimize()) }, '_'),
-        el('button', { title: 'Maximize', onclick: (e) => (e.stopPropagation(), this.toggleMax()) }, '□'),
-        el('button.close', { title: 'Close', onclick: (e) => (e.stopPropagation(), this.close()) }, '✕')),
+        appTile({ id: appId, icon: appIcon }, 'sm'), this.titleEl,
+        el('button', { title: 'Minimize', onclick: (e) => (e.stopPropagation(), this.minimize()) }, icon('minus')),
+        el('button', { title: 'Maximize', onclick: (e) => (e.stopPropagation(), this.toggleMax()) }, icon('maximize')),
+        el('button.close', { title: 'Close', onclick: (e) => (e.stopPropagation(), this.close()) }, icon('x'))),
       this.bodyEl);
     this.node.addEventListener('mousedown', () => this.focus());
     desktop.winLayer.append(this.node);
@@ -109,6 +146,7 @@ export class Desktop {
     this.winLayer = el('div.win-layer');
     this.taskItems = el('div.row', { style: { gap: '4px', flexWrap: 'nowrap', overflow: 'hidden' } });
     this.clockEl = el('span', '9:00 AM');
+    this.statusEl = theme === 'player' ? el('div.tray-status') : null;
     this.trayExtra = el('span');
     this.startMenu = null;
     this.user = user;
@@ -118,7 +156,7 @@ export class Desktop {
     this.root.append(
       this.iconLayer,
       this.winLayer,
-      el('div.taskbar', el('button.start-btn', { onclick: (e) => (e.stopPropagation(), this.toggleStart()) }, theme === 'player' ? '⊞ start' : '⊞'), this.taskItems, el('div.tray', this.trayExtra, el('span', theme === 'player' ? '🔊 📶' : '🔈'), this.clockEl)),
+      el('div.taskbar', el('button.start-btn', { onclick: (e) => (e.stopPropagation(), this.toggleStart()) }, icon('grid'), theme === 'player' ? 'start' : ''), this.taskItems, el('div.tray', this.statusEl, this.trayExtra, el('span.tray-icons', icon('volume'), icon('wifi')), this.clockEl)),
     );
     this.root.addEventListener('mousedown', (e) => {
       if (this.startMenu && !this.startMenu.contains(e.target)) this.closeStart();
@@ -133,7 +171,7 @@ export class Desktop {
         if (!app || !app.name) return null;
         const locked = this.locked.has(app.id);
         return el(`div.desk-icon${locked ? '.locked' : ''}`, { title: locked ? 'Unlocks on a later day' : app.name, dataset: { app: app.id }, onclick: () => (ic.onOpen ? ic.onOpen() : this.open(app.id)) },
-          el('span.ico', app.icon || '📄'), locked ? `🔒 ${app.name}` : app.name);
+          el('span.tile-wrap', appTile(app, 'lg'), locked ? el('span.lock-badge', icon('lock')) : null), el('span.desk-label', app.name));
       }),
     );
   }
@@ -142,7 +180,7 @@ export class Desktop {
   open(appId, opts = {}) {
     if (this.locked.has(appId)) {
       sfx('error');
-      this.notify(`🔒 ${this.apps[appId]?.name || appId} unlocks on a later day.`);
+      this.notify(`${this.apps[appId]?.name || appId} unlocks on a later day.`, { icon: 'lock' });
       return null;
     }
     const key = opts.key ? `${appId}:${opts.key}` : appId;
@@ -154,7 +192,7 @@ export class Desktop {
     const app = this.apps[appId];
     if (!app) return null;
     sfx('click');
-    const win = new Win(this, { id: key, title: opts.title || app.name, icon: app.icon, width: opts.width || app.width || 560, height: opts.height || app.height || 400, className: app.bodyClass || '', onClose: () => app.onClose?.(win) });
+    const win = new Win(this, { id: key, appId, title: opts.title || app.name, icon: app.icon, width: opts.width || app.width || 560, height: opts.height || app.height || 400, className: app.bodyClass || '', onClose: () => app.onClose?.(win) });
     this.windows.set(key, win);
     try {
       win.setBody(app.render(win, opts));
@@ -176,7 +214,7 @@ export class Desktop {
 
   renderTaskbar() {
     this.taskItems.replaceChildren(
-      ...[...this.windows.values()].map((w) => el(`button.task-item${w === this.active && !w.minimized ? '.active' : ''}`, { onclick: () => (w.minimized || w !== this.active ? w.focus() : w.minimize()) }, w.titleEl.textContent)),
+      ...[...this.windows.values()].map((w) => el(`button.task-item${w === this.active && !w.minimized ? '.active' : ''}`, { onclick: () => (w.minimized || w !== this.active ? w.focus() : w.minimize()) }, appTile({ id: w.appId, icon: w.appIcon }, 'xs'), el('span', w.titleEl.textContent))),
     );
   }
 
@@ -184,13 +222,23 @@ export class Desktop {
     this.clockEl.textContent = clockText(mins);
   }
 
+  /** PERSONAL / QUOTA readout in the taskbar (player PC only). */
+  setStatus({ earned, quota } = {}) {
+    if (!this.statusEl) return;
+    const met = earned >= quota;
+    this.statusEl.replaceChildren(
+      el('span', el('b', 'PERSONAL '), money(earned)),
+      el('span', { class: met ? 'met' : '' }, el('b', 'QUOTA '), money(quota)),
+    );
+  }
+
   toggleStart() {
     if (this.startMenu) return this.closeStart();
     const items = this.startItems || Object.entries(this.apps).filter(([, a]) => !a.hidden).map(([id, a]) => ({ id, ...a }));
     this.startMenu = el('div.start-menu',
-      el('div.head', el('span', { style: { fontSize: '26px' } }, '🧑‍💼'), this.user),
-      el('div.items', items.map((a) => el('div.item', { onclick: () => (this.closeStart(), a.action ? a.action() : this.open(a.id)) }, el('span', a.icon), (this.locked.has(a.id) ? '🔒 ' : '') + a.name))),
-      this.onStartAction ? el('div.foot', el('button.xp-btn', { onclick: () => (this.closeStart(), this.onStartAction('logoff')) }, '🚪 Stand up'), el('button.xp-btn.red', { onclick: () => (this.closeStart(), this.onStartAction('shutdown')) }, '⏻ Leave PC')) : null,
+      el('div.head', el('span.avatar', appTile({ id: 'user' }, 'md')), this.user),
+      el('div.items', items.map((a) => el(`div.item${this.locked.has(a.id) ? '.locked' : ''}`, { onclick: () => (this.closeStart(), a.action ? a.action() : this.open(a.id)) }, appTile(a, 'sm'), el('span', a.name), this.locked.has(a.id) ? icon('lock') : null))),
+      this.onStartAction ? el('div.foot', el('button.xp-btn.red', { onclick: () => (this.closeStart(), this.onStartAction('shutdown')) }, icon('power'), 'Leave PC')) : null,
     );
     this.root.append(this.startMenu);
   }
@@ -200,8 +248,8 @@ export class Desktop {
     this.startMenu = null;
   }
 
-  notify(text, { kind = '', ms = 4500, actions = [] } = {}) {
-    const n = el(`div.notif${kind ? '.' + kind : ''}`, el('div', text), actions.length ? el('div.row', { style: { marginTop: '8px' } }, actions.map((a) => el('button.xp-btn' + (a.primary ? '.primary' : ''), { onclick: () => (n.remove(), a.onClick()) }, a.label))) : null);
+  notify(text, { kind = '', ms = 4500, actions = [], icon: ic = '' } = {}) {
+    const n = el(`div.notif${kind ? '.' + kind : ''}`, el('div.notif-row', ic ? icon(ic) : null, el('div', text)), actions.length ? el('div.row', { style: { marginTop: '8px' } }, actions.map((a) => el('button.xp-btn' + (a.primary ? '.primary' : ''), { onclick: () => (n.remove(), a.onClick()) }, a.label))) : null);
     this.root.append(n);
     sfx('notify');
     if (ms) setTimeout(() => n.remove(), ms);

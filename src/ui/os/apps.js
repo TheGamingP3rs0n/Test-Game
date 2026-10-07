@@ -1,6 +1,6 @@
 // App registry for your work PC + the "office" apps: Phone, Notes, Cashier, Playbook,
 // Messenger, Files, DefendoMax antivirus.
-import { el, money, clockText, uid, downloadBlob, dataURLToBlob } from '../../core/util.js';
+import { el, setText, money, clockText, uid, downloadBlob, dataURLToBlob } from '../../core/util.js';
 import { bus } from '../../core/bus.js';
 import { sfx } from '../../core/audio.js';
 import { content } from '../../game/content.js';
@@ -237,7 +237,7 @@ function antivirusApp(game, win) {
         clearInterval(t);
         btn.disabled = false;
         if (game.virus) {
-          status.textContent = `☣️ Removed ${Math.floor(Math.random() * 3000) + 300} threats, including "BonziBuddy" and "grandma_gets_even.dll".`;
+          setText(status, `☣️ Removed ${Math.floor(Math.random() * 3000) + 300} threats, including "BonziBuddy" and "grandma_gets_even.dll".`);
           sfx('win');
           if (game.chaos.active?.def.type === 'virus') game.chaos.finish(true);
           else game.virus = false;

@@ -54,6 +54,7 @@ export async function bossReview(report) {
         schema: REVIEW_SCHEMA,
         schemaName: 'boss_review',
         temperature: 1,
+        lastPatience: 25000,
       });
       return { speech: r.speech, mood: r.mood, nickname: r.nickname };
     } catch (err) {
@@ -75,6 +76,8 @@ export async function bossExcuse(report, excuse) {
         schema: EXCUSE_SCHEMA,
         schemaName: 'boss_excuse',
         temperature: 1,
+        maxTokens: 220,
+        lastPatience: 25000,
       });
       return r;
     } catch (err) {

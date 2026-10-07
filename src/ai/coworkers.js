@@ -60,16 +60,15 @@ export async function coworkerReply(contact, history, playerText) {
   }
   try {
     return await chatText({
-      system: `You are ${contact.name} (fake American alias "${contact.alias}"), a coworker at a chaotic scam call center in Kolkata in a dark-comedy video game. Personality: ${contact.vibe}. You are texting the player in a work chat app. Reply in 1-2 short casual chat messages (max 35 words total), with emojis sometimes. Stay in character. ${contact.id === 'boss' ? 'You type in ALL CAPS and threaten absurd consequences.' : ''}`,
+      system: `You are ${contact.name} (fake American alias "${contact.alias}"), a coworker at a chaotic scam call center in Kolkata in a dark-comedy video game. Personality: ${contact.vibe}. You are texting the player in a work chat app. Reply with 1-2 short casual chat messages (max 30 words total). No emojis. Stay in character. ${contact.id === 'boss' ? 'You type in ALL CAPS and threaten absurd consequences.' : ''}`,
       messages: [
-        ...history.slice(-10).map((m) => ({ role: m.from === 'me' ? 'user' : 'assistant', content: m.text })),
+        ...history.slice(-6).map((m) => ({ role: m.from === 'me' ? 'user' : 'assistant', content: m.text })),
         { role: 'user', content: playerText },
       ],
       temperature: 1,
-      maxTokens: 400,
     });
   } catch (err) {
     console.warn('coworker reply failed', err);
-    return '(no signal 📵)';
+    return pick(['(no reply — probably on a call)', 'brb, boss is walking past', 'can\'t talk, caller is crying']);
   }
 }

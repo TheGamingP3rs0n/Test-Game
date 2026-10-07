@@ -6,6 +6,7 @@ import { bus } from '../core/bus.js';
 import { sfx, startLoop, stopLoop } from '../core/audio.js';
 import { uid, pick, randInt, money, clamp } from '../core/util.js';
 import { buildVictimPC } from './victimPC.js';
+import { chatBudgetLow } from '../ai/groq.js';
 import { upgradeLevel } from './progression.js';
 
 const RING_SECONDS = 24;
@@ -40,6 +41,7 @@ export class CallManager {
     this.caller = caller;
     this.sandbox = sandbox;
     this.ringTimer = RING_SECONDS;
+    this.ringTotal = RING_SECONDS;
     startLoop('ringLoop');
     this.game.world?.office.setPhoneRinging(true);
     bus.emit('call:ring', caller);
@@ -69,7 +71,7 @@ export class CallManager {
       this.game.addHighlight(`Let ${caller.name} ring out. The boss heard.`);
     }
     bus.emit('call:missed', caller);
-    bus.emit('toast', { kind: 'warn', text: `📵 Missed call from ${caller.name}. The boss tracks missed calls.` });
+    bus.emit('toast', { kind: 'warn', icon: 'phone-missed', title: 'Missed call', text: `${caller.name} rang out. The boss tracks missed calls.` });
   }
 
   decline() {
@@ -98,6 +100,7 @@ export class CallManager {
     this.callTime = 0;
     this.holdTimer = 0;
     this.remoteConnected = false;
+    this.screenBlanked = false;
     this.flagged = false;
     if (!this.sandbox && this.game.day) {
       this.game.day.callsTaken++;
@@ -105,7 +108,7 @@ export class CallManager {
     }
     bus.emit('call:start', { caller, conv: this.conv });
     bus.emit('call:update', this.snapshot(0, ''));
-    if (this.conv.offline) bus.emit('call:line', { who: 'system', text: 'Offline mode: no Groq API key, so this caller uses a simple canned brain. Add your key in Settings for the real AI.' });
+    if (this.conv.offline) bus.emit('call:line', { who: 'system', icon: 'bot', text: 'Offline mode: no Groq API key, so this caller uses a simple canned brain. Add your key in Settings for the real AI.' });
     await this.respond(() => this.conv.opening());
   }
 
@@ -125,7 +128,7 @@ export class CallManager {
     if (!this.active || !text) return;
     if (this.holdTimer > 0) {
       bus.emit('call:line', { who: 'agent', text });
-      bus.emit('call:line', { who: 'system', text: '🎵 You are talking to hold music. They can\'t hear you.' });
+      bus.emit('call:line', { who: 'system', icon: 'music', text: 'You are talking to hold music. They can\'t hear you.' });
       return;
     }
     speaker.stop();
@@ -150,9 +153,8 @@ export class CallManager {
   }
 
   async apply(r) {
-    if (r.aiError && !this.warnedAI) {
-      this.warnedAI = true;
-      bus.emit('toast', { kind: 'warn', text: `AI hiccup (${r.aiError.slice(0, 120)}). Used the backup brain for that line.` });
+    if (r.lineTrouble && r.aiError) {
+      bus.emit('call:line', { who: 'system', icon: 'signal', text: r.rateLimited ? 'Bad line: the free Groq AI is at its per-minute limit. Wait a few seconds, then say it again.' : `Bad line: the AI didn't answer (${r.aiError.slice(0, 110)}). Say it again.` });
     }
     const caller = this.caller;
     const text = stripDirections(r.reply);
@@ -167,7 +169,7 @@ export class CallManager {
 
     switch (r.action) {
       case 'grant_remote':
-        bus.emit('call:line', { who: 'system', html: `🖥️ ${caller.firstName} installed <b>RemoteHelp</b>. Their ID: <span class="code">${r.remoteCode}</span>. Enter it in the RemoteHelp app on your PC.` });
+        bus.emit('call:line', { who: 'system', icon: 'monitor', html: `${caller.firstName} installed <b>RemoteHelp</b>. Their ID: <span class="code">${r.remoteCode}</span>. Enter it in the RemoteHelp app on your PC.` });
         bus.emit('call:remote', { code: r.remoteCode });
         break;
       case 'pay':
@@ -203,7 +205,7 @@ export class CallManager {
     }
     if (!this.sandbox && this.game.day) this.game.day.pendingPayments.push(pay);
     const label = { gift_cards: 'gift cards', wire_transfer: 'a wire transfer', crypto: 'crypto', bank_transfer: 'a bank transfer', cash_by_mail: 'cash in the mail' }[method] || method;
-    bus.emit('call:line', { who: 'system', html: `💸 <b>${this.caller.firstName} sent ${money(amount)} in ${label}.</b> Collect it in the <b>Cashier</b> app.` });
+    bus.emit('call:line', { who: 'system', icon: 'payout', html: `<b>${this.caller.firstName} sent ${money(amount)} in ${label}.</b> Collect it in the <b>Cashier</b> app.` });
     bus.emit('call:payment', pay);
     sfx('notify');
   }
@@ -211,7 +213,7 @@ export class CallManager {
   startHold(seconds) {
     this.holdTimer = seconds;
     bus.emit('call:hold', true);
-    bus.emit('call:line', { who: 'system', text: `⏸️ ${this.caller.firstName} put you on hold.` });
+    bus.emit('call:line', { who: 'system', icon: 'pause', text: `${this.caller.firstName} put you on hold.` });
     sfx('hold');
     this.holdMusic = setInterval(() => this.holdTimer > 0 && sfx('hold'), 2400);
   }
@@ -225,7 +227,7 @@ export class CallManager {
 
   sendFile() {
     const file = { name: pick(['bank_statement.pdf.exe', 'invoice_2026.pdf.exe', 'Screenshot_of_error.png.scr', 'my_account_info.docm']), from: this.caller.name };
-    bus.emit('call:line', { who: 'system', text: `📎 ${this.caller.firstName} sent you a file: ${file.name}` });
+    bus.emit('call:line', { who: 'system', icon: 'clip', text: `${this.caller.firstName} sent you a file: ${file.name}` });
     bus.emit('call:file', file);
   }
 
@@ -248,11 +250,14 @@ export class CallManager {
   /** Something happened on the victim's screen while the agent was remoted in. */
   screenEvent(text, { react = false } = {}) {
     if (!this.active) return;
+    // their monitor is blacked out: they can't see what you're doing
+    if (this.screenBlanked) return;
     const now = performance.now();
-    const canReact = react && this.pending === 0 && !speaker.speaking && now - this.lastReact > 5000;
+    // reactions cost an AI request — keep them rare so the free tier lasts
+    const canReact = react && this.pending === 0 && !speaker.speaking && now - this.lastReact > 9000 && (this.conv.offline || !chatBudgetLow());
     if (canReact) this.lastReact = now;
     const line = `[SCREEN] The agent ${text}.`;
-    bus.emit('call:line', { who: 'event', text: `👁️ ${this.caller.firstName} sees: you ${text}` });
+    bus.emit('call:line', { who: 'event', text: `${this.caller.firstName} sees: you ${text}` });
     if (canReact) this.respond(() => this.conv.event(line, { react: true }));
     else this.conv.event(line);
   }
@@ -261,7 +266,7 @@ export class CallManager {
   backgroundEvent(text, { react = true } = {}) {
     if (!this.active) return;
     const now = performance.now();
-    const canReact = react && this.pending === 0 && now - this.lastReact > 3000;
+    const canReact = react && this.pending === 0 && now - this.lastReact > 6000 && (this.conv.offline || !chatBudgetLow());
     if (canReact) this.lastReact = now;
     if (canReact) this.respond(() => this.conv.event(`[BACKGROUND] ${text}`, { react: true }));
     else this.conv.event(`[BACKGROUND] ${text}`);
@@ -283,12 +288,12 @@ export class CallManager {
         this.game.addHighlight(`Caught scambaiter "${this.caller.name}" red-handed.`);
       }
       sfx('win');
-      bus.emit('call:line', { who: 'system', text: '🚩 Correct! That was a scambaiter. Boss bonus +$150 and they lose a sucker.' });
+      bus.emit('call:line', { who: 'system', icon: 'flag', text: 'Correct! That was a scambaiter. Boss bonus +$150 and they lose a sucker.' });
       speaker.speak("[laughing] Ha! Okay, okay, you got me. Good instincts. See you on the next stream!", this.voice(), { emotion: 'happy' }).then(() => this.end('flagged'));
     } else {
       if (!this.sandbox && this.game.day) this.game.day.wrongFlags++;
       sfx('error');
-      bus.emit('call:line', { who: 'system', text: '❌ Wrong! That was a real victim — and you just accused them of being a YouTuber.' });
+      bus.emit('call:line', { who: 'system', icon: 'x', text: 'Wrong! That was a real victim — and you just accused them of being a YouTuber.' });
       speaker.speak("[confused] A what? A scam-baker? I don't know what you're talking about. This is very rude. Goodbye!", this.voice(), { emotion: 'angry' }).then(() => this.end('wrong_flag'));
     }
   }

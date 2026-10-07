@@ -11,6 +11,8 @@ import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { LightProbeGenerator } from 'three/addons/lights/LightProbeGenerator.js';
 
+const ENV_SIZE = 128;
+
 export const SUN_DIR = new THREE.Vector3(0.32, -0.6, 1).normalize(); // direction light travels
 
 export class LightingRig {
@@ -145,21 +147,59 @@ export class LightingRig {
   }
 
   /**
+   * A neutral warm environment map with the SAME size as the baked one (128px cube).
+   * Materials compile with an env map from the very start, so swapping in the real
+   * bake later is just a texture change (no shader recompiles = no hitch).
+   */
+  placeholderEnvironment() {
+    const faces = [0, 1, 2, 3, 4, 5].map((i) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = ENV_SIZE;
+      const ctx = c.getContext('2d');
+      const g = ctx.createLinearGradient(0, 0, 0, ENV_SIZE);
+      const top = i === 2 ? '#fff6e6' : i === 3 ? '#8a7f6c' : '#e8dcc3';
+      const bot = i === 2 ? '#fff6e6' : i === 3 ? '#8a7f6c' : '#a99d86';
+      g.addColorStop(0, top);
+      g.addColorStop(1, bot);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, ENV_SIZE, ENV_SIZE);
+      return c;
+    });
+    const cube = new THREE.CubeTexture(faces);
+    cube.colorSpace = THREE.SRGBColorSpace;
+    cube.needsUpdate = true;
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    const env = pmrem.fromCubemap(cube);
+    pmrem.dispose();
+    cube.dispose();
+    this.envRT = env;
+    return env.texture;
+  }
+
+  /**
    * Bake the reflection + irradiance probe from the middle of the room.
    * `hide` = objects to hide while capturing (e.g. the floor reflector).
+   * The capture keeps the current environment bound so it reuses the exact shader
+   * variants the main view already compiled.
    */
   async bake(center = new THREE.Vector3(-2, 1.5, 0.5), hide = []) {
     const r = this.renderer;
-    const cubeRT = new THREE.WebGLCubeRenderTarget(128, { type: THREE.HalfFloatType });
+    const cubeRT = new THREE.WebGLCubeRenderTarget(ENV_SIZE, { type: THREE.HalfFloatType });
     const cam = new THREE.CubeCamera(0.1, 60, cubeRT);
     cam.position.copy(center);
-    const prevEnv = this.scene.environment;
-    this.scene.environment = null;
     const vis = hide.map((o) => o.visible);
     hide.forEach((o) => (o.visible = false));
     if (this.dust) this.dust.visible = false;
     const prevProbe = this.probe.intensity;
     this.probe.intensity = 0;
+    try {
+      const prev = r.getRenderTarget();
+      r.setRenderTarget(cubeRT);
+      await r.compileAsync(this.scene, cam.children[0]);
+      r.setRenderTarget(prev);
+    } catch {
+      /* compiles synchronously below instead */
+    }
     cam.update(r, this.scene);
     hide.forEach((o, i) => (o.visible = vis[i]));
     if (this.dust) this.dust.visible = true;
@@ -177,15 +217,16 @@ export class LightingRig {
       console.warn('Light probe bake failed (using hemisphere light only)', err);
       this.hemi.intensity = 0.5;
     }
+    await new Promise((res) => requestAnimationFrame(res));
     const pmrem = new THREE.PMREMGenerator(r);
     const env = pmrem.fromCubemap(cubeRT.texture);
-    this.envRT?.dispose();
+    const old = this.envRT;
     this.envRT = env;
     this.scene.environment = env.texture;
     this.scene.environmentIntensity = this.powered ? 0.6 : 0.35;
     pmrem.dispose();
     cubeRT.dispose();
-    if (prevEnv && prevEnv !== env.texture) prevEnv.dispose?.();
+    if (old && old !== env) old.dispose();
   }
 
   setPower(on) {

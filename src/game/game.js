@@ -8,7 +8,8 @@ import { baiterChanceFor, decideVerdict, upgradeLevel } from './progression.js';
 import { content, nextCaller, prepareCaller } from './content.js';
 import { CallManager } from './callManager.js';
 import { ChaosManager, bindChaosGame } from './chaos.js';
-import { sfx, startLoop, stopLoop, stopAllLoops } from '../core/audio.js';
+import { sfx, startLoop, stopLoop, stopAllLoops, pauseGameAudio, resumeGameAudio } from '../core/audio.js';
+import { music } from '../core/music.js';
 import { money, clamp, pick } from '../core/util.js';
 import { scriptedMessage } from '../ai/coworkers.js';
 import { speaker } from '../ai/speech.js';
@@ -93,6 +94,7 @@ export const game = {
     this.chaos.planDay(this.day.day, this.dayStart, this.dayEnd);
     this.nextCallIn = 4;
     startLoop('officeAmbience', 'amb');
+    music.play('shift');
     this.ui.showHUD?.(true);
     this.chat('morning', 1);
     saveRun(this.run);
@@ -161,9 +163,10 @@ export const game = {
     if (!allowNegative) this.day.earned = Math.max(0, this.day.earned);
     if (amount > 0) {
       sfx('cash');
-      bus.emit('toast', { kind: 'money', text: `💰 +${money(amount)}${label ? ` — ${label}` : ''}` });
+      bus.emit('money:popup', { amount });
+      bus.emit('toast', { kind: 'money', icon: 'money', text: `+${money(amount)}${label ? ` — ${label}` : ''}` });
     } else if (amount < 0) {
-      bus.emit('toast', { kind: 'bad', text: `💸 ${money(amount)}${label ? ` — ${label}` : ''}` });
+      bus.emit('toast', { kind: 'bad', icon: 'payout', text: `${money(amount)}${label ? ` — ${label}` : ''}` });
     }
     bus.emit('money:changed', this.day.earned);
   },
@@ -205,7 +208,7 @@ export const game = {
   onFakePayment(pay) {
     this.run.heat = clamp(this.run.heat + (upgradeLevel(this.run, 'vpn') ? 3 : 6), 0, 100);
     this.addHighlight(`${pay.from} "paid" ${money(pay.amount)} in fake codes. Scambaiter!`);
-    bus.emit('toast', { kind: 'bad', text: `🚫 ${money(pay.amount)} from ${pay.from} was FAKE. That caller was a scambaiter. Heat +${upgradeLevel(this.run, 'vpn') ? 3 : 6}` });
+    bus.emit('toast', { kind: 'bad', icon: 'ban', text: `${money(pay.amount)} from ${pay.from} was FAKE. That caller was a scambaiter. Heat +${upgradeLevel(this.run, 'vpn') ? 3 : 6}` });
   },
 
   addHighlight(text, shame = false) {
@@ -257,6 +260,7 @@ export const game = {
       rule: verdict,
     };
     sfx('sting');
+    music.play('review');
     this.ui.showHUD?.(false);
     // boss strides to the middle of his office
     const boss = world.office.boss;
@@ -301,6 +305,14 @@ export const game = {
   },
 
   quitToMenu() {
+    if (this.paused) {
+      this.paused = false;
+      document.body.classList.remove('paused');
+      resumeGameAudio();
+      speaker.resume();
+      music.setMuffled(false);
+      this.ui.hidePause?.();
+    }
     this.phase = 'menu';
     if (this.calls.state !== 'idle') this.calls.end('agent_hung_up');
     this.chaos.reset();
@@ -328,18 +340,35 @@ export const game = {
   },
 
   // ------------------------------------------------------------------ pause / computer
+  // Pausing freezes everything: the clock, the ringing phone (sound, shake and timer),
+  // caller voices, alarms and the 3D world. Resuming picks up exactly where it stopped.
   pause() {
     if (!this.playing || this.paused) return;
     this.paused = true;
+    this.modeBeforePause = world.mode;
     world.setMode('frozen');
+    pauseGameAudio();
+    speaker.pause();
+    music.setMuffled(true);
+    document.body.classList.add('paused');
+    sfx('pause');
     this.ui.showPause?.();
   },
 
   resume() {
     if (!this.paused) return;
     this.paused = false;
-    world.setMode(this.computerOpen ? 'computer' : 'play');
-    if (!this.computerOpen) world.player.requestLock();
+    document.body.classList.remove('paused');
+    resumeGameAudio();
+    speaker.resume();
+    music.setMuffled(false);
+    sfx('unpause');
+    this.ui.hidePause?.();
+    if (this.computerOpen) world.setMode('computer');
+    else {
+      world.setMode('play');
+      world.player.requestLock();
+    }
   },
 
   openComputer() {
@@ -363,29 +392,29 @@ export const game = {
   interact(id) {
     if (!this.playing) return;
     if (this.chaos.interact(id)) return;
-    const say = (t) => bus.emit('toast', { text: t });
+    const say = (t, icon) => bus.emit('toast', { text: t, icon });
     switch (id) {
       case 'computer':
         return this.openComputer();
       case 'phone':
         if (this.calls.state === 'ringing') return this.calls.answer();
-        return say(this.calls.active ? '📞 You\'re already on a call (talk with your headset).' : '📞 No calls right now. Enjoy the 4 seconds of peace.');
+        return say(this.calls.active ? 'You\'re already on a call (talk with your headset).' : 'No calls right now. Enjoy the 4 seconds of peace.', 'phone');
       case 'bossdoor':
         sfx('stamp');
         return say(pick(['Mr. Chatterjee (through the door): "GO AWAY. QUOTA."', 'Mr. Chatterjee: "Unless you are bringing money or samosas, DO NOT KNOCK."']));
       case 'breaker':
-        return say('⚡ All breakers are on. The wiring is held together by hope and tape.');
+        return say('All breakers are on. The wiring is held together by hope and tape.', 'zap');
       case 'router':
-        return say('📶 The router blinks happily. For now.');
+        return say('The router blinks happily. For now.', 'wifi');
       case 'shredder':
         sfx('shred');
-        return say('🗑️ You shred Raju\'s lunch order. Worth it.');
+        return say('You shred Raju\'s lunch order. Worth it.', 'trash');
       case 'supplies':
-        return say('🎧 Spare headsets, chai packets, and 400 empty Google Play card sleeves.');
+        return say('Spare headsets, chai packets, and 400 empty Google Play card sleeves.', 'headphones');
       case 'extinguisher':
-        return say('🧯 A fire extinguisher. Expired in 2011, but optimistic.');
+        return say('A fire extinguisher. Expired in 2011, but optimistic.', 'extinguisher');
       case 'cow':
-        return say('🐄 Moo.');
+        return say('Moo.', 'cow');
       default:
         return undefined;
     }
