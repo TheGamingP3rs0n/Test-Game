@@ -120,10 +120,12 @@ export class Office {
     this.root.add(ceil);
 
     this.colliders.push(
-      { minX: -99, maxX: ROOM.minX + 0.15, minZ: -99, maxZ: 99 },
-      { minX: ROOM.maxX - 0.15, maxX: 99, minZ: -99, maxZ: 99 },
+      { minX: -99, maxX: ROOM.minX + 0.15, minZ: -99, maxZ: ROOM.maxZ },
+      { minX: ROOM.maxX - 0.15, maxX: 99, minZ: -99, maxZ: ROOM.maxZ },
       { minX: -99, maxX: 99, minZ: -99, maxZ: ROOM.minZ + 0.15 },
-      { minX: -99, maxX: 99, minZ: ROOM.maxZ - 0.15, maxZ: 99 },
+      // back wall of the MAIN room, with a doorway gap (X[-1,1]) through to the back wing
+      { minX: -99, maxX: -1.0, minZ: ROOM.maxZ - 0.15, maxZ: ROOM.maxZ + 0.1 },
+      { minX: 1.0, maxX: 99, minZ: ROOM.maxZ - 0.15, maxZ: ROOM.maxZ + 0.1 },
     );
   }
 
@@ -230,7 +232,8 @@ export class Office {
     const rail = new THREE.MeshStandardMaterial({ color: 0x6e4f33, roughness: 0.45, envMapIntensity: 0.7 });
     const segs = [];
     for (let x = ROOM.minX; x < ROOM.maxX; x += 2) segs.push({ x: x + 1, z: ROOM.minZ, rot: 0, kind: 'wallWindow' });
-    for (let x = ROOM.minX; x < ROOM.maxX; x += 2) segs.push({ x: x + 1, z: ROOM.maxZ, rot: Math.PI, kind: 'wall' });
+    // back wall — leave the centre segment out as a doorway into the back wing (hall + rooms)
+    for (let x = ROOM.minX; x < ROOM.maxX; x += 2) { if (Math.abs(x + 1) < 0.1) continue; segs.push({ x: x + 1, z: ROOM.maxZ, rot: Math.PI, kind: 'wall' }); }
     for (let z = ROOM.minZ; z < ROOM.maxZ; z += 2) segs.push({ x: ROOM.minX, z: z + 1, rot: Math.PI / 2, kind: 'wall' });
     for (let z = ROOM.minZ; z < ROOM.maxZ; z += 2) segs.push({ x: ROOM.maxX, z: z + 1, rot: -Math.PI / 2, kind: Math.abs(z + 1 - 3) < 0.1 ? 'wallDoorway' : 'wall' });
     for (const s of segs) {
@@ -506,130 +509,183 @@ export class Office {
     this.register({ id: 'bossdoor', object: label, label: 'Knock on boss door', radius: 2.5 });
   }
 
-  // Break room (sit, take a break — the phone won't ring in here) + restrooms.
+  // The BACK WING: a doorway in the main room's back wall opens onto a hallway that
+  // leads to a proper break room (right) and the restrooms (left) — real separate rooms.
   async buildAmenities() {
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0xdfd6c2, roughness: 0.85, envMapIntensity: 0.3 });
-    const trimMat = M.metal(0xb7babd, 0.3);
-    const tileMat = new THREE.MeshStandardMaterial({ color: 0xcdd6da, roughness: 0.35, envMapIntensity: 0.6 });
-    const H = 2.35; // interior partition height
-    const T = 0.1; // wall thickness
-    // a straight partition with an optional doorway gap; adds mesh + colliders.
-    const partition = (axis, fixed, a, b, gap) => {
-      const parts = gap ? [[a, gap[0]], [gap[1], b]] : [[a, b]];
-      for (const [s, e] of parts) {
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xe3dac4, roughness: 0.82, envMapIntensity: 0.35 });
+    const frameMat = M.metal(0xd6d3cc, 0.35);
+    const tileMat = new THREE.MeshStandardMaterial({ color: 0xd4dde1, roughness: 0.3, envMapIntensity: 0.7 });
+    const carpetMat = new THREE.MeshStandardMaterial({ ...terrazzoMaps([6, 6]), roughness: 1, metalness: 0, envMapIntensity: 0.5 });
+    const glass = M.glass(0xbcd6e6, 0.12);
+    const H = ROOM.height;
+    const TH = 0.18; // wall thickness
+
+    // ---- generic builders --------------------------------------------------
+    const floorCeil = (minX, maxX, minZ, maxZ, floorMat) => {
+      const w = maxX - minX, d = maxZ - minZ, cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+      const fl = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
+      fl.rotation.x = -Math.PI / 2; fl.position.set(cx, 0.003, cz); fl.receiveShadow = true; this.root.add(fl);
+      const cl = new THREE.Mesh(new THREE.PlaneGeometry(w, d), this.ceilMat);
+      cl.rotation.x = Math.PI / 2; cl.position.set(cx, H, cz); cl.receiveShadow = true; this.root.add(cl);
+    };
+    // a wall along an axis ('x' runs along X at z=fixed; 'z' runs along Z at x=fixed),
+    // with any number of doorway gaps [from,to]. Builds mesh + colliders + lintels/frames.
+    const wall = (axis, fixed, a, b, gaps = []) => {
+      const g = [...gaps].sort((p, q) => p[0] - q[0]);
+      const runs = []; let cur = a;
+      for (const [s, e] of g) { if (s > cur) runs.push([cur, s]); cur = Math.max(cur, e); }
+      if (cur < b) runs.push([cur, b]);
+      for (const [s, e] of runs) {
         if (e - s < 0.02) continue;
-        const mid = (s + e) / 2;
-        const len = e - s;
-        if (axis === 'x') { // wall runs along X at z=fixed
-          box(len, H, T, wallMat, [mid, H / 2, fixed], this.root, { cast: false });
-          box(len, 0.05, T + 0.02, trimMat, [mid, H - 0.03, fixed], this.root, { cast: false });
-          this.colliders.push({ minX: s, maxX: e, minZ: fixed - T / 2 - 0.05, maxZ: fixed + T / 2 + 0.05 });
-        } else { // wall runs along Z at x=fixed
-          box(T, H, len, wallMat, [fixed, H / 2, mid], this.root, { cast: false });
-          box(T + 0.02, 0.05, len, trimMat, [fixed, H - 0.03, mid], this.root, { cast: false });
-          this.colliders.push({ minX: fixed - T / 2 - 0.05, maxX: fixed + T / 2 + 0.05, minZ: s, maxZ: e });
+        const mid = (s + e) / 2, len = e - s;
+        if (axis === 'x') {
+          box(len, H, TH, wallMat, [mid, H / 2, fixed], this.root, { cast: false });
+          this.colliders.push({ minX: s, maxX: e, minZ: fixed - TH / 2 - 0.04, maxZ: fixed + TH / 2 + 0.04 });
+        } else {
+          box(TH, H, len, wallMat, [fixed, H / 2, mid], this.root, { cast: false });
+          this.colliders.push({ minX: fixed - TH / 2 - 0.04, maxX: fixed + TH / 2 + 0.04, minZ: s, maxZ: e });
         }
       }
-      if (gap) { // lintel over the doorway
-        if (axis === 'x') box(gap[1] - gap[0], 0.28, T, wallMat, [(gap[0] + gap[1]) / 2, H - 0.14, fixed], this.root, { cast: false });
-        else box(T, 0.28, gap[1] - gap[0], wallMat, [fixed, H - 0.14, (gap[0] + gap[1]) / 2], this.root, { cast: false });
+      for (const [s, e] of g) { // lintel over the 2.1m opening + jamb posts
+        const dh = H - 2.1, gc = (s + e) / 2, gw = e - s;
+        if (axis === 'x') {
+          box(gw, dh, TH, wallMat, [gc, 2.1 + dh / 2, fixed], this.root, { cast: false });
+          box(0.09, 2.12, 0.22, frameMat, [s, 1.06, fixed], this.root, { cast: false });
+          box(0.09, 2.12, 0.22, frameMat, [e, 1.06, fixed], this.root, { cast: false });
+        } else {
+          box(TH, dh, gw, wallMat, [fixed, 2.1 + dh / 2, gc], this.root, { cast: false });
+          box(0.22, 2.12, 0.09, frameMat, [fixed, 1.06, s], this.root, { cast: false });
+          box(0.22, 2.12, 0.09, frameMat, [fixed, 1.06, e], this.root, { cast: false });
+        }
       }
     };
-    const sign = (text, w, pos, rotY) => {
-      const s = new THREE.Mesh(new THREE.PlaneGeometry(w, 0.26), new THREE.MeshStandardMaterial({ roughness: 0.4, map: canvasTexture(320, 64, (ctx) => {
-        ctx.fillStyle = '#243447'; ctx.fillRect(0, 0, 320, 64);
-        ctx.fillStyle = '#ffd34d'; ctx.font = 'bold 30px "Bungee", Impact'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(text, 160, 34);
+    const ceilingLight = (cx, cz, w = 2.0, d = 1.0, intensity = 5.5, color = 0xfff3dc) => {
+      box(w + 0.08, 0.06, d + 0.08, frameMat, [cx, H - 0.03, cz], this.root, { cast: false });
+      const diff = new THREE.Mesh(new THREE.PlaneGeometry(w, d), this.diffuserMat);
+      diff.rotation.x = Math.PI / 2; diff.position.set(cx, H - 0.066, cz); this.root.add(diff);
+      const lp = new THREE.PointLight(color, intensity, 8, 2.2);
+      lp.position.set(cx, H - 0.4, cz); this.rig.addAccent(lp);
+    };
+    const sign = (text, w, pos, rotY, bg = '#243447') => {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.22), new THREE.MeshStandardMaterial({ roughness: 0.4, map: canvasTexture(384, 84, (ctx) => {
+        ctx.fillStyle = bg; ctx.fillRect(0, 0, 384, 84);
+        ctx.fillStyle = '#ffd34d'; ctx.font = 'bold 34px "Bungee", Impact'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, 192, 46);
       }) }));
       s.position.set(...pos); s.rotation.y = rotY; this.root.add(s);
     };
+    const seat = (id, x, z, yaw, cushColor, label = 'Sit down — take a break') => {
+      const cushion = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.42), new THREE.MeshStandardMaterial({ color: cushColor, roughness: 0.8, emissive: cushColor, emissiveIntensity: 0.1 }));
+      cushion.position.set(x, 0.47, z); cushion.castShadow = true; this.root.add(cushion);
+      this.sitSpots[id] = { pos: new THREE.Vector3(x, 0, z), yaw };
+      this.register({ id, object: cushion, label, radius: 1.9 });
+    };
 
-    // ---- BREAK ROOM: back-right corner X[5.0,9] Z[2.6,6], door in the left partition.
-    partition('x', 2.6, 5.0, ROOM.maxX, null); // front wall (solid)
-    partition('z', 5.0, 2.6, ROOM.maxZ, [3.15, 4.25]); // left wall with a doorway
-    sign('BREAK ROOM', 1.1, [5.06, 2.08, 3.7], Math.PI / 2);
-    this.noCallZones.push({ minX: 5.0, maxX: ROOM.maxX, minZ: 2.6, maxZ: ROOM.maxZ, kind: 'break' });
+    // ===================== HALLWAY  X[-8,8]  Z[6,8.5] ======================
+    floorCeil(-8, 8, 6, 8.62, carpetMat);
+    wall('z', -8, 6, 12.5);                 // left/outer wall (hall + restroom)
+    wall('z', 8, 6, 13);                    // right/outer wall (hall + break)
+    wall('x', 8.5, -8, 8, [[-5.6, -4.1], [4.1, 5.6]]); // back-of-hall wall: two room doorways
+    // main-room entrance doorway frame (the X[-1,1] gap left in the back wall)
+    box(2.0, H - 2.1, 0.2, wallMat, [0, 2.1 + (H - 2.1) / 2, ROOM.maxZ], this.root, { cast: false });
+    box(0.1, 2.12, 0.24, frameMat, [-1, 1.06, ROOM.maxZ], this.root, { cast: false });
+    box(0.1, 2.12, 0.24, frameMat, [1, 1.06, ROOM.maxZ], this.root, { cast: false });
+    ceilingLight(-4.5, 7.3, 2.2, 0.8); ceilingLight(0, 7.3, 2.2, 0.8); ceilingLight(4.5, 7.3, 2.2, 0.8);
+    sign('BREAK ROOM →', 1.5, [4.85, 2.4, 8.46], Math.PI);
+    sign('← RESTROOMS', 1.5, [-4.85, 2.4, 8.46], Math.PI);
+    sign('STAFF ONLY', 0.9, [0, 2.45, ROOM.maxZ - 0.02], Math.PI, '#7a1010');
+    // hallway decor: a bench, a water cooler, a plant, a notice board
+    this.root.add(pivot(await instance('furniture', 'loungeChair'), { x: -2.4, z: 8.0, rotY: Math.PI }));
+    this.root.add(pivot(await instance('furniture', 'loungeChair'), { x: -1.4, z: 8.0, rotY: Math.PI }));
+    this.root.add(pivot(await instance('furniture', 'pottedPlant'), { x: 7.4, z: 7.9 }));
+    this.root.add(pivot(await instance('furniture', 'pottedPlant'), { x: -7.4, z: 7.9 }));
+    const notice = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.9), new THREE.MeshStandardMaterial({ map: posterTexture({ title: 'STAFF NOTICES', sub: 'Do NOT microwave fish.', bg: '#2a3b2f', fg: '#ffe14d' }), roughness: 0.6 }));
+    notice.position.set(2.5, 1.7, 8.44); notice.rotation.y = Math.PI; this.root.add(notice);
 
-    // wall TV on the front partition, facing the sofa
-    box(1.5, 0.9, 0.06, M.plastic(0x0b0b0b, 0.3), [7.0, 1.6, 2.68], this.root, { cast: false });
+    // ===================== BREAK ROOM  X[2.5,8]  Z[8.5,13] =================
+    floorCeil(2.5, 8, 8.4, 13, carpetMat);
+    wall('z', 2.5, 8.5, 13);               // break-room left wall
+    ceilingLight(4.2, 10.0, 2.2, 1.0); ceilingLight(6.4, 11.2, 1.6, 1.0);
+    this.noCallZones.push({ minX: 2.5, maxX: 8, minZ: 8.5, maxZ: 13, kind: 'break' });
+    // glass curtain wall at the back (z=13) looking onto a back lot
+    box(5.5, 0.32, TH, wallMat, [5.25, 0.16, 13], this.root, { cast: false });
+    box(5.5, 2.45, 0.05, glass, [5.25, 1.55, 13], this.root, { cast: false });
+    box(5.5, 0.3, TH, wallMat, [5.25, H - 0.15, 13], this.root, { cast: false });
+    for (const mx of [2.5, 3.9, 5.25, 6.6, 8]) box(0.08, 2.5, 0.12, frameMat, [mx, 1.55, 13], this.root, { cast: false });
+    this.colliders.push({ minX: 2.5, maxX: 8, minZ: 13 - TH, maxZ: 13 + TH });
+    // wall TV on the left wall, facing into the room
+    box(0.06, 0.9, 1.5, M.plastic(0x0b0b0b, 0.3), [2.62, 1.75, 10.2], this.root, { cast: false });
     const tvScreen = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), new THREE.MeshStandardMaterial({ color: 0x0a0f14, emissive: 0x2b6cff, emissiveIntensity: 0.6, roughness: 0.3 }));
-    tvScreen.position.set(7.0, 1.6, 2.72);
-    this.root.add(tvScreen);
+    tvScreen.position.set(2.66, 1.75, 10.2); tvScreen.rotation.y = Math.PI / 2; this.root.add(tvScreen);
     this.breakTv = tvScreen;
-    const tvLight = new THREE.RectAreaLight(0x5a8cff, 1.4, 1.4, 0.8);
-    tvLight.position.set(7.0, 1.6, 2.78); tvLight.lookAt(7.0, 1.4, 5);
-    this.rig.addAccent(tvLight);
-
-    // vending machine (built) against the right wall
+    const tvL = new THREE.RectAreaLight(0x5a8cff, 1.3, 1.4, 0.8); tvL.position.set(2.72, 1.75, 10.2); tvL.lookAt(6, 1.5, 10.2); this.rig.addAccent(tvL);
+    // vending machine against the right wall
     const vend = new THREE.Group();
     box(0.9, 1.9, 0.6, M.plastic(0xc21f1f, 0.4), [0, 0.95, 0], vend);
-    box(0.62, 1.4, 0.04, new THREE.MeshStandardMaterial({ color: 0x0a0f14, emissive: 0x18324a, emissiveIntensity: 0.8, roughness: 0.2 }), [-0.1, 1.05, 0.3], vend, { cast: false });
-    box(0.18, 1.8, 0.04, M.plastic(0x161616, 0.5), [0.32, 0.95, 0.3], vend, { cast: false });
-    vend.position.set(8.4, 0, 3.1); vend.rotation.y = -0.15;
-    this.root.add(vend);
-    this.colliders.push({ minX: 8.0, maxX: 9, minZ: 2.7, maxZ: 3.6 });
-    const vendLight = new THREE.PointLight(0x66aaff, 0.5, 2.2, 2);
-    vendLight.position.set(8.3, 1.2, 3.4); this.rig.addAccent(vendLight).userData.keepOnOutage = true;
+    box(0.62, 1.4, 0.04, new THREE.MeshStandardMaterial({ color: 0x0a0f14, emissive: 0x18324a, emissiveIntensity: 0.8, roughness: 0.2 }), [0.1, 1.05, -0.3], vend, { cast: false });
+    vend.position.set(7.5, 0, 9.1); vend.rotation.y = -Math.PI / 2; this.root.add(vend);
+    this.colliders.push({ minX: 7.2, maxX: 8, minZ: 8.6, maxZ: 9.6 });
+    const vendLight = new THREE.PointLight(0x66aaff, 6, 3, 2);
+    vendLight.position.set(7.2, 1.2, 9.1);
+    this.rig.addAccent(vendLight).userData.keepOnOutage = true;
+    // sofa (faces the back windows), coffee table, two lounge chairs
+    this.root.add(pivot(await instance('furniture', 'loungeSofa'), { x: 5.1, z: 9.15, rotY: 0 }));
+    this.root.add(pivot(await instance('furniture', 'tableCoffee'), { x: 5.1, z: 10.7 }));
+    this.root.add(pivot(await instance('furniture', 'loungeChair'), { x: 3.3, z: 10.7, rotY: Math.PI / 2 }));
+    this.root.add(pivot(await instance('furniture', 'loungeChair'), { x: 6.9, z: 10.7, rotY: -Math.PI / 2 }));
+    this.root.add(pivot(await instance('furniture', 'table'), { x: 3.5, z: 12.1, rotY: 0 }));
+    this.root.add(pivot(await instance('furniture', 'chairCushion'), { x: 2.75, z: 12.1, rotY: Math.PI / 2 }));
+    this.root.add(pivot(await instance('furniture', 'chairCushion'), { x: 4.25, z: 12.1, rotY: -Math.PI / 2 }));
+    this.root.add(pivot(await instance('furniture', 'pottedPlant'), { x: 7.4, z: 12.4 }));
+    this.colliders.push({ minX: 4.3, maxX: 5.9, minZ: 8.8, maxZ: 9.5 }, { minX: 4.6, maxX: 5.6, minZ: 10.3, maxZ: 11.1 });
+    this.colliders.push({ minX: 3.0, maxX: 3.6, minZ: 10.4, maxZ: 11.0 }, { minX: 6.6, maxX: 7.2, minZ: 10.4, maxZ: 11.0 }, { minX: 3.0, maxX: 4.0, minZ: 11.8, maxZ: 12.4 });
+    seat('sit:sofaL', 4.72, 9.5, Math.PI, 0x3f8f6f);
+    seat('sit:sofaR', 5.48, 9.5, Math.PI, 0x3f8f6f);
+    seat('sit:chairL', 3.45, 10.7, -Math.PI / 2, 0x6f5fb0);
+    seat('sit:chairR', 6.75, 10.7, Math.PI / 2, 0x6f5fb0);
+    seat('sit:tableL', 2.95, 12.1, -Math.PI / 2, 0xc98a3a, 'Sit at the table');
+    seat('sit:tableR', 4.05, 12.1, Math.PI / 2, 0xc98a3a, 'Sit at the table');
 
-    // two lounge chairs facing the room, plus sit cushions on them and on the sofa
-    this.root.add(pivot(await instance('furniture', 'loungeChair'), { x: 8.4, z: 5.3, rotY: -Math.PI / 2 }));
-    this.root.add(pivot(await instance('furniture', 'loungeChair'), { x: 5.6, z: 5.3, rotY: Math.PI / 2 }));
-    this.root.add(pivot(await instance('furniture', 'pottedPlant'), { x: 5.4, z: 2.95 }));
-    this.colliders.push({ minX: 8.1, maxX: 8.7, minZ: 5.0, maxZ: 5.6 }, { minX: 5.3, maxX: 5.9, minZ: 5.0, maxZ: 5.6 });
-    // sofa is at (7.3, 5.4) facing -Z (added in buildProps). Seats face into the room.
-    const seat = (id, x, z, yaw, cushColor) => {
-      const cushion = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.42), new THREE.MeshStandardMaterial({ color: cushColor, roughness: 0.8, emissive: cushColor, emissiveIntensity: 0.08 }));
-      cushion.position.set(x, 0.47, z);
-      cushion.castShadow = true;
-      this.root.add(cushion);
-      this.sitSpots[id] = { pos: new THREE.Vector3(x, 0, z), yaw };
-      this.register({ id, object: cushion, label: 'Sit down — take a break', radius: 1.8 });
-    };
-    seat('sit:sofaL', 6.95, 5.35, 0, 0x3f8f6f);
-    seat('sit:sofaR', 7.75, 5.35, 0, 0x3f8f6f);
-    seat('sit:chairR', 8.35, 5.25, Math.PI / 2, 0x6f5fb0); // faces -X (into room)
-    seat('sit:chairL', 5.65, 5.25, -Math.PI / 2, 0x6f5fb0); // faces +X (into room)
+    // back lot visible through the break-room windows (z>13)
+    const lotGround = new THREE.Mesh(new THREE.PlaneGeometry(16, 12), M.matte(0x4a4640));
+    lotGround.rotation.x = -Math.PI / 2; lotGround.position.set(5.25, 0.0, 19); lotGround.receiveShadow = true; this.root.add(lotGround);
+    for (let x = 3; x <= 7.5; x += 1.5) { const ln = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 2.2), M.matte(0xd8cf9e)); ln.rotation.x = -Math.PI / 2; ln.position.set(x, 0.01, 15.5); this.root.add(ln); }
+    this.root.add(pivot(await instance('vehicles', 'van'), { x: 4.2, z: 15.6, rotY: -Math.PI / 2 }));
+    this.root.add(pivot(await instance('vehicles', 'taxi'), { x: 6.6, z: 15.8, rotY: -Math.PI / 2 }));
+    box(16, 2.4, 0.3, M.matte(0x6b6358), [5.25, 1.2, 24.5], this.root, { cast: false }); // boundary wall
+    const lotLamp = new THREE.PointLight(0xffd9a0, 3.5, 16, 2); lotLamp.position.set(5.25, 3.2, 17); this.rig.addAccent(lotLamp);
 
-    // ---- RESTROOMS: niche X[0.6,4.4] Z[3.7,6], door in the front partition.
-    partition('x', 3.7, 0.6, 4.4, [1.1, 2.0]); // front wall with a doorway
-    partition('z', 0.6, 3.7, ROOM.maxZ, null); // left wall
-    partition('z', 4.4, 3.7, ROOM.maxZ, null); // right wall
-    sign('RESTROOMS', 1.0, [2.95, 2.12, 3.64], Math.PI);
-    this.noCallZones.push({ minX: 0.6, maxX: 4.4, minZ: 3.7, maxZ: ROOM.maxZ, kind: 'restroom' });
-    // tiled back splash so it reads as a bathroom
-    box(3.6, 1.6, 0.03, tileMat, [2.5, 0.8, ROOM.maxZ - 0.07], this.root, { cast: false });
-    // two stalls against the back wall
+    // ===================== RESTROOMS  X[-8,-2.5]  Z[8.5,12.5] ==============
+    floorCeil(-8, -2.5, 8.4, 12.5, tileMat);
+    wall('z', -2.5, 8.5, 12.5);            // restroom right wall
+    wall('x', 12.5, -8, -2.5);             // restroom back wall
+    ceilingLight(-6.3, 10.0, 1.8, 1.0); ceilingLight(-3.6, 10.6, 1.4, 1.0);
+    this.noCallZones.push({ minX: -8, maxX: -2.5, minZ: 8.5, maxZ: 12.5, kind: 'restroom' });
+    // tiled splash on the back wall
+    box(5.3, 1.7, 0.03, tileMat, [-5.25, 0.85, 12.42], this.root, { cast: false });
     const stallMat = new THREE.MeshStandardMaterial({ color: 0x8a9aa6, roughness: 0.4, envMapIntensity: 0.4 });
-    const toilet = (cx) => {
+    const toilet = (cx, id) => {
       const g = new THREE.Group();
-      box(0.4, 0.32, 0.5, M.plastic(0xf4f4f0, 0.3), [0, 0.16, -0.02], g); // bowl base
+      box(0.4, 0.32, 0.5, M.plastic(0xf4f4f0, 0.3), [0, 0.16, -0.02], g);
       const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.15, 0.16, 16), M.plastic(0xf8f8f4, 0.25));
-      bowl.position.set(0, 0.4, -0.1); g.add(bowl); // seat faces the room (-Z)
-      box(0.36, 0.42, 0.14, M.plastic(0xf4f4f0, 0.3), [0, 0.5, 0.2], g); // tank against the wall
-      g.position.set(cx, 0, ROOM.maxZ - 0.42);
-      this.root.add(g);
-      const id = `sit:${cx > 2.5 ? 'wcR' : 'wcL'}`;
-      this.sitSpots[id] = { pos: new THREE.Vector3(cx, 0, ROOM.maxZ - 0.72), yaw: 0 }; // yaw 0 faces -Z (the door)
-      this.register({ id, object: g, label: 'Use the restroom (nice break)', radius: 1.6 });
+      bowl.position.set(0, 0.4, -0.1); g.add(bowl);
+      box(0.36, 0.42, 0.14, M.plastic(0xf4f4f0, 0.3), [0, 0.5, 0.2], g);
+      g.position.set(cx, 0, 12.15); this.root.add(g);
+      if (id) { this.sitSpots[id] = { pos: new THREE.Vector3(cx, 0, 11.8), yaw: 0 }; this.register({ id, object: g, label: 'Use the restroom (a nice break)', radius: 1.5 }); }
     };
-    // stall side partitions
-    for (const sx of [1.35, 2.55, 3.75]) box(0.04, 1.6, 1.1, stallMat, [sx, 0.8, ROOM.maxZ - 0.55], this.root, { cast: false });
-    toilet(1.95); toilet(3.15);
-    // sink counter along the left wall
+    for (const sx of [-7.4, -6.0, -4.6, -3.2]) box(0.04, 1.6, 1.15, stallMat, [sx, 0.8, 11.95], this.root, { cast: false });
+    toilet(-6.7, 'sit:wcL'); toilet(-5.3, 'sit:wcR'); toilet(-3.9, null);
+    // sink counter + mirror on the right wall
     const counter = new THREE.Group();
-    box(1.4, 0.08, 0.5, M.plastic(0x2a2a30, 0.3), [0, 0.86, 0], counter);
-    for (const sz of [-0.4, 0.4]) {
+    box(1.8, 0.08, 0.5, M.plastic(0x2a2a30, 0.3), [0, 0.86, 0], counter);
+    for (const sz of [-0.55, 0.0, 0.55]) {
       const basin = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.1, 0.1, 16), M.plastic(0xf2f2ee, 0.25));
       basin.position.set(0, 0.9, sz); counter.add(basin);
-      const tap = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.14), trimMat);
-      tap.position.set(-0.12, 0.98, sz); tap.rotation.z = 0.4; counter.add(tap);
     }
-    counter.position.set(0.78, 0, 5.2); counter.rotation.y = -Math.PI / 2;
-    this.root.add(counter);
-    this.colliders.push({ minX: 0.6, maxX: 1.1, minZ: 4.6, maxZ: 5.9 }); // sink counter
-    // mirror strip
-    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.5), new THREE.MeshStandardMaterial({ color: 0x9fb4c0, metalness: 0.9, roughness: 0.1, envMapIntensity: 1.2 }));
-    mirror.position.set(0.72, 1.4, 5.2); mirror.rotation.y = Math.PI / 2; this.root.add(mirror);
+    counter.position.set(-2.75, 0, 9.6); counter.rotation.y = Math.PI / 2; this.root.add(counter);
+    this.colliders.push({ minX: -2.95, maxX: -2.45, minZ: 8.7, maxZ: 10.5 });
+    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.6), new THREE.MeshStandardMaterial({ color: 0x9fb4c0, metalness: 0.9, roughness: 0.1, envMapIntensity: 1.2 }));
+    mirror.position.set(-2.69, 1.45, 9.6); mirror.rotation.y = -Math.PI / 2; this.root.add(mirror);
   }
 
   async buildProps() {
@@ -705,8 +761,8 @@ export class Office {
     this.colliders.push({ minX: 2.3, maxX: 2.9, minZ: -1.45, maxZ: -0.95 });
     this.register({ id: 'shredder', object: sh, label: 'Shredder', radius: 2 });
 
-    // supply cabinet (left of the restroom niche)
-    const cab = pivot(await instance('furniture', 'bookcaseClosedWide'), { x: -0.4, z: ROOM.maxZ - 0.3, rotY: Math.PI });
+    // supply cabinet (main-room back wall, clear of the back-wing doorway)
+    const cab = pivot(await instance('furniture', 'bookcaseClosedWide'), { x: 3.2, z: ROOM.maxZ - 0.3, rotY: Math.PI });
     this.root.add(cab);
     const supLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.2), new THREE.MeshStandardMaterial({ map: canvasTexture(256, 56, (ctx) => {
       ctx.fillStyle = '#fff';
@@ -717,10 +773,10 @@ export class Office {
       ctx.fillText('SUPPLIES', 112, 38);
       drawIcon(ctx, 'headphones', 178, 12, 30, '#c00', 2.6);
     }) }));
-    supLabel.position.set(-0.4, 1.75, ROOM.maxZ - 0.52);
+    supLabel.position.set(3.2, 1.75, ROOM.maxZ - 0.52);
     supLabel.rotation.y = Math.PI;
     this.root.add(supLabel);
-    this.colliders.push({ minX: -1.2, maxX: 0.4, minZ: ROOM.maxZ - 0.6, maxZ: ROOM.maxZ });
+    this.colliders.push({ minX: 2.4, maxX: 4.0, minZ: ROOM.maxZ - 0.6, maxZ: ROOM.maxZ });
     this.register({ id: 'supplies', object: cab, label: 'Supply cabinet', radius: 2.2 });
 
     // water cooler
@@ -738,14 +794,11 @@ export class Office {
     box(0.4, 0.02, 0.3, M.matte(0xffffff), [1.9, 0.98, 1.0], this.root);
     this.colliders.push({ minX: 1.4, maxX: 2.4, minZ: 0.1, maxZ: 1.9 });
 
-    // break-room lounge sofa + coffee table (inside the break-room enclosure)
-    this.root.add(pivot(await instance('furniture', 'loungeSofa'), { x: 7.3, z: 5.45, rotY: Math.PI }));
-    this.root.add(pivot(await instance('furniture', 'tableCoffee'), { x: 7.3, z: 4.4 }));
+    // a coat rack by the back-wing doorway (the lounge now lives in the break room)
     this.root.add(pivot(await instance('furniture', 'coatRackStanding'), { x: 8.5, z: 1.9 }));
-    this.colliders.push({ minX: 6.5, maxX: 8.2, minZ: 5.1, maxZ: 5.95 }, { minX: 6.8, maxX: 7.8, minZ: 4.05, maxZ: 4.75 });
 
-    for (const [x, z] of [[-8.5, -5.5], [4.7, 2.3], [8.5, -0.9], [-8.5, 5.7]]) this.root.add(pivot(await instance('furniture', 'pottedPlant'), { x, z }));
-    for (const [x, z] of [[0.6, -2.6], [-7.8, 0.6], [4.8, 2.2]]) this.root.add(pivot(await instance('furniture', 'trashcan'), { x, z }));
+    for (const [x, z] of [[-8.5, -5.5], [5.2, 2.2], [8.5, -0.9], [-8.5, 5.7]]) this.root.add(pivot(await instance('furniture', 'pottedPlant'), { x, z }));
+    for (const [x, z] of [[0.6, -2.6], [-7.8, 0.6], [4.3, 5.6]]) this.root.add(pivot(await instance('furniture', 'trashcan'), { x, z }));
     for (const [x, z, r] of [[-6.0, 5.5, 0.3], [-6.5, 5.6, -0.2], [-6.2, 4.9, 0.8]]) this.root.add(pivot(await instance('furniture', pick(['cardboardBoxClosed', 'cardboardBoxOpen'])), { x, z, rotY: r }));
     this.colliders.push({ minX: -6.8, maxX: -5.7, minZ: 4.6, maxZ: 6 });
 
@@ -879,7 +932,7 @@ export class Office {
     // stacks of files tied with red string on the bookcase & floor (bureaucracy!)
     const fileMat = M.matte(0xd9c9a0);
     const tape = M.matte(0xb3261e);
-    for (const [x, z, n] of [[4.0, -5.6, 5], [8.6, -5.6, 7], [0.5, 5.6, 4]]) {
+    for (const [x, z, n] of [[4.0, -5.6, 5], [8.6, -5.6, 7], [6.8, 5.6, 4]]) {
       for (let i = 0; i < n; i++) {
         box(0.32, 0.05, 0.24, fileMat, [x + (Math.random() - 0.5) * 0.04, 0.025 + i * 0.05, z + (Math.random() - 0.5) * 0.04], this.root);
       }
