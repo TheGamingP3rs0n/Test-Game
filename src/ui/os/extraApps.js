@@ -7,6 +7,20 @@ import { sfx } from '../../core/audio.js';
 import { SHOP, upgradeLevel } from '../../game/progression.js';
 import { saveRun } from '../../game/run.js';
 import { icon, iconFor } from '../icons.js';
+import { renderItemThumb } from './itemRender.js';
+
+/** The product image for a catalogue item: a coloured backdrop with a 3D-rendered model
+ *  (built offscreen from primitives). Falls back to the line icon if rendering fails. */
+function itemImg(it) {
+  const fallback = icon(iconFor(it.icon || (it.kind === 'tool' ? 'target' : 'cart'), 'cart'));
+  const wrap = el('div.sz-img', { style: { background: `linear-gradient(160deg, ${it.color}, color-mix(in srgb, ${it.color} 70%, #000))` } }, fallback);
+  setTimeout(() => {
+    if (!wrap.isConnected) return;
+    const url = renderItemThumb(it.id);
+    if (url) wrap.replaceChildren(el('img.sz-3d', { src: url, alt: it.name }));
+  }, 0);
+  return wrap;
+}
 
 // Physical tools you can equip and (comedically) use on coworkers/NPCs — all parody,
 // no gore. Exported so the world/hotbar can read the catalog.
@@ -56,7 +70,7 @@ export function scamazonApp(game, win) {
         ? holdToBuy(() => { run.wallet -= it.price; it.buy?.(); it.effect?.(); sfx('cash'); saveRun(run); bus.emit('money:changed'); render(); }, money(it.price), false)
         : el('button.sz-need', { disabled: true }, maxed ? 'Owned' : `Need ${money(it.price)}`);
       return el(`div.sz-item${lvl ? '.owned' : ''}`,
-        el('div.sz-img', { style: { background: `linear-gradient(160deg, ${it.color}, color-mix(in srgb, ${it.color} 70%, #000))` } }, icon(iconFor(it.icon || (it.kind === 'tool' ? 'target' : 'cart'), 'cart'))),
+        itemImg(it),
         el('div.sz-body',
           el('div.sz-nm', it.name),
           el('div.sz-ds', it.desc),
