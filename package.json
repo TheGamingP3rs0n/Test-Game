@@ -1,16 +1,20 @@
 {
   "name": "scam-call-center",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.4.0",
   "type": "module",
-  "description": "Single-player scam call center comedy sim with AI callers (Groq), built with Vite + three.js.",
+  "description": "Scam call center comedy sim with AI callers and co-op, built with Vite + three.js.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "play": "vite build && vite preview --open",
     "mp": "node server/mp-server.mjs",
-    "host": "vite build && node scripts/host.mjs"
+    "host": "vite build && node scripts/host.mjs",
+    "app": "vite build && electron .",
+    "dist:win": "vite build && electron-builder --win",
+    "dist:mac": "vite build && electron-builder --mac",
+    "dist:linux": "vite build && electron-builder --linux"
   },
   "dependencies": {
     "@dicebear/avataaars": "^9.4.3",
@@ -27,6 +31,93 @@
   "devDependencies": {
     "@iconify-json/flat-color-icons": "^1.2.3",
     "@iconify-json/fluent-color": "^1.2.21",
+    "electron": "^38.8.6",
+    "electron-builder": "^26.15.3",
     "vite": "^8.3.3"
+  },
+  "main": "electron/main.cjs",
+  "author": "TheGamingP3rs0n",
+  "homepage": "https://github.com/TheGamingP3rs0n/Test-Game",
+  "build": {
+    "appId": "com.thegamingp3rs0n.scamcallcenter",
+    "productName": "Scam Call Center",
+    "artifactName": "ScamCallCenter-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "server/**",
+      "src/net/room.js",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "ScamCallCenter-${version}-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "ScamCallCenter-${version}-Portable.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.simulation-games",
+      "icon": "build/icon.png",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Used for push-to-talk with AI callers and proximity voice chat with teammates."
+      }
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Game",
+      "icon": "build/icon.png"
+    },
+    "publish": null
   }
 }

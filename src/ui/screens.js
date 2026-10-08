@@ -66,6 +66,7 @@ export class Screens {
           btn('Mods', 'puzzle', onMods),
           btn('Settings', 'settings', onSettings),
           btn('Credits', 'scroll', () => this.credits()),
+          window.desktopApp ? btn('Quit to desktop', 'door', () => window.desktopApp.quit()) : null,
           hasApiKey() ? null : el('div.keywarn', icon('warn'), el('span', 'No Groq API key yet — callers use a simple offline brain and browser voices. Add a free key in ', el('a', { href: '#', onclick: (e) => (e.preventDefault(), onSettings()) }, 'Settings'), ' for real AI conversations.'))),
         el('div.footer', el('span', `${content.callers.length} callers • ${content.scenarios.length} scams • ${content.events.length} events loaded${content.customClients.length ? ` • ${content.customClients.length} custom clients` : ''}`), el('span', 'A parody game. All callers, companies and money are fictional.'))),
       el('div.version', VERSION)));

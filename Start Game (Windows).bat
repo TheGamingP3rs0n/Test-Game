@@ -19,6 +19,7 @@ if errorlevel 1 (
 
 if not exist "node_modules\vite" (
   echo   First launch: installing game files. This takes a minute...
+  set ELECTRON_SKIP_BINARY_DOWNLOAD=1
   call npm install --no-audit --no-fund
   if errorlevel 1 (
     echo.

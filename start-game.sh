@@ -10,7 +10,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 if [ ! -d node_modules/vite ]; then
   echo "First launch: installing game files. This takes a minute..."
-  npm install --no-audit --no-fund || { read -r -p "Install failed. Press Enter to close..."; exit 1; }
+  ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install --no-audit --no-fund || { read -r -p "Install failed. Press Enter to close..."; exit 1; }
 fi
 echo "Starting the game. Keep this window open while you play."
 npm run play
