@@ -207,6 +207,7 @@ class World {
       this.updateMenuCamera(dt);
     } else if (this.mode === 'play') {
       this.player.update(dt);
+      this.office.bossFace(this.player.pos, dt);
     } else if (this.cinematic) {
       const c = this.cinematic;
       c.t = Math.min(1, c.t + dt / c.dur);

@@ -22,6 +22,7 @@ import { openSettings } from './ui/settings.js';
 import { openClientMaker } from './ui/clientMaker.js';
 import { openMods } from './ui/mods.js';
 import { openMultiplayer, initCoop } from './ui/multiplayer.js';
+import { openBossTalk } from './ui/bossTalk.js';
 import { showReview } from './ui/review.js';
 import { showShop } from './ui/shop.js';
 import { bindChatStore } from './ui/os/apps.js';
@@ -77,6 +78,7 @@ async function boot() {
   game.ui = {
     showMenu,
     hideScreens: () => screens.hide(),
+    openBossTalk: () => openBossTalk(game),
     showBriefing: (run, day) => {
       computer.newDay();
       screens.briefing(run, day);

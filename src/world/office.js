@@ -1002,6 +1002,20 @@ export class Office {
     this.boss.label = 'the boss';
     this.root.add(this.boss.root);
     this.npcs.push(this.boss);
+    this.register({ id: 'boss', object: this.boss.root, label: 'Talk to Mr. Chatterjee (negotiate)', radius: 2.4 });
+  }
+
+  /** Mr. Chatterjee glares at you: when he's standing idle he turns to face the player. */
+  bossFace(playerPos, dt) {
+    const b = this.boss;
+    if (!b || this.bossBusy || b.path.length || b.reactT > 0) return;
+    const p = b.root.position;
+    const dx = playerPos.x - p.x, dz = playerPos.z - p.z;
+    if (dx * dx + dz * dz > 81) return; // only when you're within ~9m
+    const want = Math.atan2(dx, dz);
+    let diff = want - b.root.rotation.y;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    b.root.rotation.y += diff * Math.min(1, dt * 3.5);
   }
 
   // ------------------------------------------------------------------ helpers

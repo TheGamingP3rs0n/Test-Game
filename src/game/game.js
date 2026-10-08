@@ -493,7 +493,9 @@ export const game = {
         return say(this.calls.active ? 'You\'re already on a call (talk with your headset).' : 'No calls right now. Enjoy the 4 seconds of peace.', 'phone');
       case 'bossdoor':
         sfx('stamp');
-        return say(pick(['Mr. Chatterjee (through the door): "GO AWAY. QUOTA."', 'Mr. Chatterjee: "Unless you are bringing money or samosas, DO NOT KNOCK."']));
+        return say(pick(['Mr. Chatterjee (through the glass): "GO AWAY. QUOTA." (Walk in and press E on him if you dare.)', 'Mr. Chatterjee: "Unless you are bringing money or samosas, DO NOT KNOCK." (You could just walk in…)']));
+      case 'boss':
+        return this.ui.openBossTalk?.();
       case 'breaker':
         return say('All breakers are on. The wiring is held together by hope and tape.', 'zap');
       case 'router':

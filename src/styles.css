@@ -792,3 +792,31 @@ body.pc-open .banner { top: 18px; }
 .cred-line { font-size: 13px; color: var(--muted); line-height: 1.5; }
 .cred-foot { text-align: center; font-size: 12px; color: var(--muted); margin: 6px 0 0; }
 @media (max-width: 600px) { .cred-grid { grid-template-columns: 1fr; } }
+
+/* ------------------------------------------------------------------ boss walk-in negotiation */
+.bosstalk-modal { width: min(620px, 94vw); }
+.bosstalk { display: flex; flex-direction: column; gap: 12px; }
+.bt-head { display: flex; align-items: center; gap: 14px; }
+.bt-head h2 { margin: 0; font-family: var(--display); letter-spacing: .5px; }
+.bt-head p { margin: 2px 0 0; font-size: 13px; }
+.bt-avatar { width: 54px; height: 54px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(160deg, #b3261e, #5c0f0b); color: #ffd34d; box-shadow: 0 6px 16px rgba(0,0,0,.35); }
+.bt-avatar .ico { width: 30px; height: 30px; }
+.bt-meter { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.bt-meter-bar { flex: 1; height: 9px; border-radius: 6px; background: rgba(255,255,255,.08); overflow: hidden; }
+.bt-meter-fill { height: 100%; width: 0; background: linear-gradient(90deg, #f0a01e, #e0602a); transition: width .4s; }
+.bt-meter-fill.hot { background: linear-gradient(90deg, #e0602a, #d1242b); animation: redflash .8s infinite alternate; }
+.bt-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.bt-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 800; background: rgba(47,211,107,.14); color: #8ff0b4; border: 1px solid rgba(47,211,107,.35); }
+.bt-chip.off { background: rgba(255,255,255,.05); color: var(--muted); border-color: rgba(255,255,255,.1); }
+.bt-chip .ico { width: 14px; height: 14px; }
+.bt-log { height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.07); }
+.bt-line { max-width: 86%; padding: 8px 12px; border-radius: 12px; line-height: 1.4; font-size: 14px; }
+.bt-line b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; opacity: .7; margin-bottom: 2px; }
+.bt-line.boss { align-self: flex-start; background: rgba(179,38,30,.22); border: 1px solid rgba(179,38,30,.4); }
+.bt-line.player { align-self: flex-end; background: rgba(43,108,255,.2); border: 1px solid rgba(43,108,255,.4); }
+.bt-line.system { align-self: center; max-width: 100%; background: rgba(240,180,30,.16); border: 1px solid rgba(240,180,30,.45); color: #ffd98a; font-weight: 800; font-size: 13px; text-align: center; }
+.bt-line.system b { display: none; }
+.bt-line.thinking span { animation: btblink .9s infinite alternate; }
+@keyframes btblink { from { opacity: .35 } to { opacity: 1 } }
+.bt-compose { display: flex; gap: 8px; }
+.bt-compose .input { flex: 1; }
