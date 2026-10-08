@@ -46,7 +46,7 @@ export class RemotePlayers {
     npc.play('idle');
     this.scene.add(npc.root);
     const tag = textSprite(name || `Agent ${id}`, { bg: color || '#1f9d4c', fg: '#fff', font: 'bold 34px Inter, Arial' });
-    tag.position.set(0, 2.1, 0);
+    tag.position.set(0, 1.95, 0);
     npc.root.add(tag);
     npc.label = name || `Agent ${id}`;
     slot.npc = npc;
@@ -65,7 +65,7 @@ export class RemotePlayers {
       s.tag.material.map?.dispose();
       s.tag.material.dispose();
       s.tag = textSprite(name || `Agent ${id}`, { bg: s.color || '#1f9d4c', fg: '#fff', font: 'bold 34px Inter, Arial' });
-      s.tag.position.set(0, 2.1, 0);
+      s.tag.position.set(0, 1.95, 0);
       s.npc.root.add(s.tag);
     }
   }

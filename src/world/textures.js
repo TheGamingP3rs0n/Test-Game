@@ -340,7 +340,7 @@ export function textSprite(text, { bg = 'rgba(255,255,255,0.95)', fg = '#111', f
     ctx.textAlign = 'center';
     lines.forEach((l, i) => ctx.fillText(l, w / 2, pad + 28 + i * 36));
   });
-  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, toneMapped: false });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(w / 380, h / 380, 1);
   sprite.renderOrder = 10;
