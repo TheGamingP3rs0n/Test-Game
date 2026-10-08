@@ -96,6 +96,8 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .version { position: absolute; left: 16px; bottom: 12px; font-size: 12px; color: rgba(255,255,255,.28); font-family: var(--mono); letter-spacing: 1px; pointer-events: none; }
 .keywarn { background: rgba(255, 159, 28, .14); border: 1px solid rgba(255, 159, 28, .5); color: #ffd7a1; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
 @media (max-width: 760px) { .menu { grid-template-columns: 1fr; } }
+@media (max-height: 860px) { .menu .buttons { gap: 10px; } .menu .buttons .btn.big { padding: 14px 24px; font-size: 20px; } .menu .keywarn { padding: 8px 12px; font-size: 12px; } }
+@media (max-height: 720px) { .menu .buttons { gap: 8px; } .menu .buttons .btn.big { padding: 11px 22px; font-size: 18px; } }
 
 /* ------------------------------------------------------------------ icons */
 .ico { display: inline-flex; align-items: center; justify-content: center; width: 1em; height: 1em; flex: none; vertical-align: -0.14em; line-height: 1; }
