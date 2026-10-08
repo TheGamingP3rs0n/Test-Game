@@ -61,7 +61,7 @@ export class Screens {
         el('div.buttons',
           hasSave ? btn('Continue run', 'play', () => g.continueRun(), '.primary') : null,
           btn(hasSave ? 'New run' : 'Start shift', 'phone', () => g.newRun(), hasSave ? '' : '.primary'),
-          btn('Multiplayer', 'users', onMultiplayer, '', el('span.badge.green', 'LAN')),
+          btn('Multiplayer', 'users', onMultiplayer, '', el('span.badge.green', 'Online')),
           btn('Custom Clients', 'contact', onClients),
           btn('Mods', 'puzzle', onMods),
           btn('Settings', 'settings', onSettings),

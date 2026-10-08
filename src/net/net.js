@@ -1,8 +1,47 @@
-// Client side of LAN co-op. Connects to the host's WebSocket server, sends our name,
+// Client side of co-op (LAN over WebSockets, or online via PeerJS join codes). Sends our name,
 // position and earnings, and emits what the server broadcasts (other players, team
 // quota, votes) back through the game bus. Single-player is unaffected when unused.
 import { bus } from '../core/bus.js';
 import { session } from '../core/store.js';
+import { createRoom, makeJoinCode } from './room.js';
+
+const PEER_PREFIX = 'scamcallcenter-kolkata-';
+
+/** Transports all look the same to Net: send(str), isOpen(), close(), and on* callbacks. */
+function wsTransport(url) {
+  const t = {};
+  let ws;
+  try { ws = new WebSocket(url); } catch (err) { setTimeout(() => t.onerror?.(err), 0); return Object.assign(t, { send() {}, isOpen: () => false, close() {} }); }
+  ws.onopen = () => t.onopen?.();
+  ws.onmessage = (e) => t.onmessage?.(e.data);
+  ws.onclose = () => t.onclose?.();
+  ws.onerror = () => t.onerror?.(new Error('Connection failed. Is the host server running?'));
+  return Object.assign(t, { send: (s) => ws.send(s), isOpen: () => ws.readyState === WebSocket.OPEN, close: () => ws.close() });
+}
+
+async function peerGuestTransport(code) {
+  const { Peer } = await import('peerjs');
+  const t = { conn: null };
+  const peer = new Peer(undefined, { debug: 0 });
+  peer.on('open', () => {
+    const c = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: 'raw' });
+    c.on('open', () => { t.conn = c; t.onopen?.(); });
+    c.on('data', (d) => t.onmessage?.(typeof d === 'string' ? d : new TextDecoder().decode(d)));
+    c.on('close', () => t.onclose?.());
+    c.on('error', (e) => t.onerror?.(e));
+  });
+  peer.on('error', (e) => t.onerror?.(e.type === 'peer-unavailable' ? new Error(`No game is hosting with code ${code}. Check it and try again.`) : new Error(`Online connection failed (${e.type || e.message}).`)));
+  return Object.assign(t, { send: (s) => t.conn?.send(s), isOpen: () => !!t.conn?.open, close: () => { try { peer.destroy(); } catch { /* noop */ } } });
+}
+
+/** The host's own client talks to the in-page room directly. */
+function localTransport(room) {
+  const t = { open: true };
+  const conn = { send: (s) => setTimeout(() => t.onmessage?.(s), 0), isOpen: () => t.open, close: () => { if (t.open) { t.open = false; t.onclose?.(); } } };
+  const h = room.connect(conn);
+  setTimeout(() => t.onopen?.(), 0);
+  return Object.assign(t, { send: (s) => h.message(s), isOpen: () => t.open, close: () => { if (t.open) { t.open = false; h.close(); t.onclose?.(); } } });
+}
 
 const DEFAULT_PORT = 8787;
 
@@ -17,7 +56,11 @@ export function toWsUrl(input) {
 
 class Net {
   constructor() {
-    this.ws = null;
+    this.transport = null;
+    this.mode = null; // 'lan' | 'online'
+    this.code = '';
+    this.hosting = null;
+    this.hasPassword = false;
     this.id = null;
     this.color = null;
     this.name = '';
@@ -36,62 +79,106 @@ class Net {
     return this.players.size;
   }
 
-  connect(url, name) {
+  /** LAN: connect to a host's WebSocket server. Resolves once the host admits us. */
+  connect(url, name, password = '') {
     this.disconnect();
     this.url = url;
+    this.mode = 'lan';
+    return this._attach(wsTransport(url), name, password);
+  }
+
+  /** Online: join a game hosted in someone's browser, by its join code. */
+  async joinOnline(code, name, password = '') {
+    this.disconnect();
+    this.mode = 'online';
+    this.code = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (this.code.length < 4) throw new Error('Enter the join code the host gave you.');
+    return this._attach(await peerGuestTransport(this.code), name, password);
+  }
+
+  /** Online: host a game in this browser. Resolves to the join code to share. */
+  async hostOnline(name, password = '') {
+    this.disconnect();
+    this.mode = 'online';
+    const { Peer } = await import('peerjs');
+    const room = createRoom({ password });
+    let peer = null;
+    let code = '';
+    for (let attempt = 0; attempt < 4 && !peer; attempt++) {
+      code = makeJoinCode();
+      peer = await new Promise((resolve, reject) => {
+        const pr = new Peer(PEER_PREFIX + code, { debug: 0 });
+        const to = setTimeout(() => { pr.destroy(); reject(new Error('Could not reach the matchmaking server. Check your internet connection.')); }, 12000);
+        pr.on('open', () => { clearTimeout(to); resolve(pr); });
+        pr.on('error', (e) => { clearTimeout(to); pr.destroy(); if (e.type === 'unavailable-id') resolve(null); else reject(new Error(`Online hosting failed (${e.type || e.message}).`)); });
+      });
+    }
+    if (!peer) throw new Error('Could not get a join code — try again.');
+    peer.on('connection', (c) => {
+      const conn = { send: (str) => c.send(str), isOpen: () => c.open, close: () => setTimeout(() => c.close(), 50) };
+      let h = null;
+      c.on('open', () => { h = room.connect(conn); });
+      c.on('data', (d) => h?.message(typeof d === 'string' ? d : JSON.stringify(d)));
+      c.on('close', () => h?.close());
+      c.on('error', () => h?.close());
+    });
+    peer.on('disconnected', () => { try { peer.reconnect(); } catch { /* noop */ } });
+    this.hosting = { peer, room };
+    this.code = code;
+    this.hasPassword = !!password;
+    await this._attach(localTransport(room), name, password);
+    return code;
+  }
+
+  _attach(transport, name, password) {
+    this.transport = transport;
     this.name = name;
     return new Promise((resolve, reject) => {
-      let ws;
-      try {
-        ws = new WebSocket(url);
-      } catch (err) {
-        return reject(err);
-      }
-      this.ws = ws;
-      const to = setTimeout(() => {
-        if (!this.connected) {
-          try { ws.close(); } catch { /* noop */ }
-          reject(new Error('Could not reach the host. Check the address and that the server is running on the same Wi-Fi.'));
-        }
-      }, 6000);
-      ws.onopen = () => {
+      let settled = false;
+      const done = (err) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(to);
-        this.connected = true;
-        this.send({ t: 'join', name });
-        bus.emit('net:open');
-        resolve();
+        if (err) { this.disconnect(); reject(err); } else resolve();
       };
-      ws.onmessage = (e) => this.onMessage(e.data);
-      ws.onclose = () => {
-        clearTimeout(to);
+      const to = setTimeout(() => done(new Error(this.mode === 'online' ? 'Could not reach that game. Check the code — and that the host is still in the lobby.' : 'Could not reach the host. Check the address and that the server is running on the same Wi-Fi.')), 15000);
+      this._welcomed = () => { this.connected = true; bus.emit('net:open'); done(); };
+      this._denied = (reason) => done(new Error(reason || 'The host refused the connection.'));
+      transport.onopen = () => this.sendRaw({ t: 'join', name, password });
+      transport.onmessage = (data) => this.onMessage(data);
+      transport.onerror = (err) => done(err instanceof Error ? err : new Error(String(err?.message || err || 'Connection failed.')));
+      transport.onclose = () => {
         const was = this.connected;
         this.connected = false;
-        this.ws = null;
-        if (was) bus.emit('net:close');
-      };
-      ws.onerror = () => {
-        if (!this.connected) {
-          clearTimeout(to);
-          reject(new Error('Connection failed. Is the host server running?'));
-        }
+        this.transport = null;
+        if (!settled) done(new Error('The host closed the connection.'));
+        else if (was) bus.emit('net:close');
       };
     });
   }
 
   disconnect() {
-    if (this.ws) {
-      try { this.ws.close(); } catch { /* noop */ }
-    }
-    this.ws = null;
+    const t = this.transport;
+    this.transport = null;
     this.connected = false;
+    if (t) { try { t.close(); } catch { /* noop */ } }
+    if (this.hosting) { try { this.hosting.peer.destroy(); } catch { /* noop */ } this.hosting = null; }
     this.players.clear();
     this.vote = null;
     session.sharedKey = '';
     session.sharedBy = '';
   }
 
+  get isHost() {
+    return !!this.hosting;
+  }
+
+  sendRaw(msg) {
+    if (this.transport?.isOpen()) this.transport.send(JSON.stringify(msg));
+  }
+
   send(msg) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
+    if (this.connected) this.sendRaw(msg);
   }
 
   /** Throttled position update (called each frame). */
@@ -132,6 +219,9 @@ class Net {
     let m;
     try { m = JSON.parse(data); } catch { return; }
     switch (m.t) {
+      case 'denied':
+        this._denied?.(m.reason);
+        break;
       case 'welcome':
         this.id = m.id;
         this.color = m.color;
@@ -139,6 +229,8 @@ class Net {
         this.players.clear();
         for (const r of m.roster) if (r.id !== this.id) this.players.set(r.id, r);
         bus.emit('net:roster', this.rosterList());
+        this._welcomed?.();
+        this._welcomed = null;
         break;
       case 'joined':
         if (m.id !== this.id) {

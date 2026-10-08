@@ -1,5 +1,5 @@
 // Proximity voice chat for co-op. Hold B to talk to teammates near you: audio goes
-// peer-to-peer over WebRTC (signalled through the LAN server), is positioned in 3D at
+// peer-to-peer over WebRTC (signalled through the host), is positioned in 3D at
 // the speaker's avatar, fades with distance, and is muffled through walls — a little
 // through the boss's glass office, a lot from the break room or the restrooms.
 // The microphone is only opened while you hold the key (and released shortly after).
@@ -9,7 +9,9 @@ import { audioCtx, gameBus, sfx } from '../core/audio.js';
 import { typingInField } from '../core/util.js';
 import { net } from './net.js';
 
-const ICE = { iceServers: [] }; // LAN: host candidates are enough
+// LAN: host candidates are enough. Online: STUN (and PeerJS's public TURN) to get through home routers.
+const LAN_ICE = { iceServers: [] };
+const ONLINE_ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' }] };
 const RELEASE_AFTER_MS = 8000; // keep the mic warm briefly after you let go, then close it
 
 /** Which room a world position is in (for muffling). */
@@ -68,7 +70,7 @@ class Voice {
   }
 
   makePeer(id) {
-    const pc = new RTCPeerConnection(ICE);
+    const pc = new RTCPeerConnection(net.mode === 'online' ? ONLINE_ICE : LAN_ICE);
     const tr = pc.addTransceiver('audio', { direction: 'sendrecv' });
     const peer = { pc, sender: tr.sender, nodes: null, audioEl: null };
     this.peers.set(id, peer);

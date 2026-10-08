@@ -1253,3 +1253,14 @@ body.xhair-cross .crosshair { width: 18px; height: 18px; border-radius: 0; backg
 
 .voice-indicator { position: absolute; left: 50%; top: 128px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: rgba(31,157,76,.92); color: #fff; font-weight: 900; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
 .voice-indicator .ico { width: 16px; height: 16px; animation: redflash .6s infinite alternate; }
+/* online multiplayer: sections, join code box, LAN addresses */
+.mp-sec { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+.mp-sec:first-of-type { margin-top: 0; }
+.mp-code, .mp-pass { background: #0c1a12; border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 10px 12px; width: 100%; font-size: 15px; }
+.mp-code { font-family: var(--mono); font-size: 20px; letter-spacing: 4px; text-transform: uppercase; }
+.mp-codebox { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px; margin-bottom: 14px; border-radius: 14px; background: rgba(47,211,107,.08); border: 1px dashed var(--green-2); }
+.mp-codebox > span { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+.mp-bigcode { font-family: var(--mono); font-size: 40px; font-weight: 800; letter-spacing: 8px; color: var(--green-2); user-select: all; }
+.mp-codeacts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.mp-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--yellow); background: rgba(255,225,77,.12); padding: 3px 9px; border-radius: 999px; }
+.mp-addr { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 18px; color: var(--green-2); }
