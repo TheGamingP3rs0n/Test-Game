@@ -1,16 +1,24 @@
-# 💸 Scam Call Center — Kolkata Night Shift
+<p align="center"><img src="artwork/cover/cover-logo-banner-3840x1240.png" alt="Scam Call Center — Kolkata Night Shift"></p>
 
-A single-player comedy call-center sim inspired by *Scam With Your Friends*. You work the
-phones at a very shady "tech support" company in Kolkata, con **AI-driven callers** out of
-their (fictional) life savings, survive office disasters, and face a performance review from
-your rage-filled boss, Mr. Chatterjee. Multiplayer co-op is marked *coming soon*.
+# Scam Call Center — Kolkata Night Shift
 
-Built with **Vite + three.js**, voiced and powered by **Groq**. Runs on `localhost`.
+**[Download the latest version](https://github.com/TheGamingP3rs0n/Test-Game/releases/latest)** for Windows, macOS or Linux.
+
+A comedy call-center sim inspired by *Scam With Your Friends*. You work the phones at a very
+shady "tech support" company in Kolkata, con **AI-driven callers** out of their (fictional)
+life savings, survive office disasters (police raids, a cow on the call floor), and face a
+performance review from your rage-filled boss, Mr. Chatterjee. Play solo, or co-op online
+with a join code or on the same Wi-Fi, with proximity voice chat.
+
+Built with **Vite + three.js**, voiced and powered by **Groq**. Press kit and store art are in [`artwork/`](artwork/).
 
 > All callers, companies and money in the game are fictional. It's a parody.
 
 | | |
 | --- | --- |
+| ![The call floor](artwork/screenshots/shot-1-call-floor-1920x1080.png) | ![Mr. Chatterjee](artwork/screenshots/shot-2-the-boss-1920x1080.png) |
+| ![Co-op crew](artwork/screenshots/shot-3-coop-1920x1080.png) | ![Police raid](artwork/screenshots/shot-4-police-raid-1920x1080.png) |
+| ![The office cow](artwork/screenshots/shot-5-office-cow-1920x1080.png) | ![Break room](artwork/screenshots/shot-6-break-room-1920x1080.png) |
 | ![Your desk](docs/screenshots/desk.jpg) | ![The office](docs/screenshots/office.jpg) |
 | ![Remote access to a victim's PC](docs/screenshots/remote-access.jpg) | ![Boss performance review](docs/screenshots/boss-review.jpg) |
 
