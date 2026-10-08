@@ -1,0 +1,31 @@
+# Publishes a downloadable build whenever a version tag (v1.2.3) is pushed, so every
+# version stays downloadable from the Releases page — the in-game updater reads these.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Package (Windows / macOS / Linux launchers included)
+        run: |
+          NAME="ScamCallCenter-${GITHUB_REF_NAME}"
+          git archive --format=zip --prefix="${NAME}/" -o "${NAME}.zip" HEAD
+          echo "ZIP=${NAME}.zip" >> "$GITHUB_ENV"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP }}
+          generate_release_notes: true

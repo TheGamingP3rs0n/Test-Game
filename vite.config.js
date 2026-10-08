@@ -6,4 +6,5 @@ export default defineConfig({
   server: { port: 5173, open: true },
   preview: { port: 4173 },
   build: { chunkSizeWarningLimit: 2000 },
+  define: { __BUILD_DATE__: JSON.stringify(new Date().toISOString()) },
 });

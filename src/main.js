@@ -23,6 +23,8 @@ import { openClientMaker } from './ui/clientMaker.js';
 import { openMods } from './ui/mods.js';
 import { openMultiplayer, initCoop } from './ui/multiplayer.js';
 import { openBossTalk } from './ui/bossTalk.js';
+import { initDisplay } from './core/display.js';
+import { autoCheck } from './core/updater.js';
 import { showReview } from './ui/review.js';
 import { showShop } from './ui/shop.js';
 import { bindChatStore } from './ui/os/apps.js';
@@ -74,6 +76,8 @@ async function boot() {
     });
   };
   initCoop(game);
+  initDisplay();
+  autoCheck().then((rel) => rel && toast(`Version ${rel.tag} is out. Open Settings → Updates to download it.`, 'info', 8000, { icon: 'download', title: 'Update available' }));
   bus.on('ui:openSettings', () => openSettings());
 
   game.ui = {

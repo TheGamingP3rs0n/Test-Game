@@ -1,3 +1,4 @@
+import { settings } from '../core/store.js';
 // Visual effects: fire, smoke, extinguisher spray, falling dust, police light bars,
 // camera shake.
 import * as THREE from 'three';
@@ -151,7 +152,7 @@ export class FX {
 
   /** Apply camera shake after the player sets the camera transform. */
   applyShake(camera) {
-    if (this.shake <= 0) return;
+    if (this.shake <= 0 || settings.cameraShake === false || settings.reduceMotion) return;
     const s = this.shake * 0.08;
     camera.position.x += (Math.random() - 0.5) * s;
     camera.position.y += (Math.random() - 0.5) * s;

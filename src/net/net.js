@@ -2,6 +2,7 @@
 // position and earnings, and emits what the server broadcasts (other players, team
 // quota, votes) back through the game bus. Single-player is unaffected when unused.
 import { bus } from '../core/bus.js';
+import { session } from '../core/store.js';
 
 const DEFAULT_PORT = 8787;
 
@@ -85,6 +86,8 @@ class Net {
     this.connected = false;
     this.players.clear();
     this.vote = null;
+    session.sharedKey = '';
+    session.sharedBy = '';
   }
 
   send(msg) {
@@ -116,6 +119,10 @@ class Net {
   }
   dm(to, text) {
     this.send({ t: 'dm', to, text });
+  }
+  /** Offer (or withdraw, with '') your Groq key to teammates who have none. */
+  shareKey(key) {
+    this.send({ t: 'sharekey', key: key || '' });
   }
 
   onMessage(data) {
@@ -175,6 +182,11 @@ class Net {
         break;
       case 'dm':
         bus.emit('net:dm', m);
+        break;
+      case 'sharedkey':
+        session.sharedKey = m.key || '';
+        session.sharedBy = m.from || '';
+        bus.emit('net:sharedkey', { from: m.from, on: !!m.key });
         break;
       case 'notice':
         bus.emit('net:notice', m.text);

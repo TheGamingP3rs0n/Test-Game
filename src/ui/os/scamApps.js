@@ -45,6 +45,7 @@ export function scamApp(game, win, appId) {
       el('div.scam-head',
         el('div.scam-title', cfg.name),
         el('div.scam-tag', cfg.tagline)),
+      quickBar(),
       jobs.length
         ? el('div.scam-jobs', ...jobs.map((p) => jobCard(p)))
         : el('div.scam-empty',
@@ -56,6 +57,44 @@ export function scamApp(game, win, appId) {
           el('span', p.from),
           el('b', { class: p.status === 'collected' ? 'ok' : 'bad' }, p.status === 'collected' ? `+${money(p.amount)}` : 'INVALID')))) : null,
     );
+  };
+
+  // Type (or paste) anything a caller said or you copied from their PC, press Enter.
+  // A real code they read you gets collected; their personal details become a trust
+  // boost on the live call; anything else is rejected.
+  const quickMsg = el('div.scam-quick-msg');
+  const quickInput = el('input.scam-input.scam-quick-input', { placeholder: `Type or paste a ${cfg.field.toLowerCase()}… then Enter`, autocomplete: 'off', spellcheck: false, onkeydown: (e) => { e.stopPropagation(); if (e.key === 'Enter') quickCheck(); } });
+  const quickBar = () => el('div.scam-quick', el('div.scam-row', quickInput, el('button.scam-verify', { onclick: () => quickCheck() }, 'Check')), quickMsg);
+  const usedIntel = new Set();
+  const quickCheck = () => {
+    const raw = quickInput.value.trim();
+    if (!raw) return;
+    const norm = game.normCode(raw);
+    const match = pending().find((p) => game.normCode(p.code) === norm);
+    if (match) {
+      const r = game.verifyScam(match, raw);
+      quickInput.value = '';
+      if (r === 'ok') { sfx('cash'); quickMsg.className = 'scam-quick-msg ok'; setText(quickMsg, `Matched ${match.from}'s code — ${money(match.amount)} collected.`); }
+      else if (r === 'invalid') { quickMsg.className = 'scam-quick-msg bad'; setText(quickMsg, `${match.from}'s code was never activated — scambaiter.`); }
+      setTimeout(render, 1600);
+      return;
+    }
+    const caller = game.calls.caller;
+    const intel = (game.run.intel || []).find((f) => String(f.value).toLowerCase() === raw.toLowerCase() && (!caller || f.callerName === caller.name));
+    if (intel && game.calls.active && !usedIntel.has(intel.value)) {
+      usedIntel.add(intel.value);
+      game.calls.adjustTrust(6, `You "verified" their ${intel.label.toLowerCase()}`);
+      game.calls.screenEvent?.(`typed your ${intel.label.toLowerCase()} ("${intel.value}") into a verification form`);
+      sfx('trustUp');
+      quickMsg.className = 'scam-quick-msg ok';
+      setText(quickMsg, `That's their ${intel.label.toLowerCase()} — not a payment code, but quoting it back made them trust you more (+6).`);
+      quickInput.value = '';
+      return;
+    }
+    sfx('error');
+    quickMsg.className = 'scam-quick-msg bad';
+    setText(quickMsg, intel ? 'You already used that detail on this call.' : "Nobody read you that. Get them to read the code out loud (or copy a highlighted detail from their PC).");
+    quickInput.select();
   };
 
   const jobCard = (p) => {

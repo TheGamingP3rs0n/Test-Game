@@ -1,3 +1,4 @@
+import { settings } from '../core/store.js';
 // Post-processing pipeline:
 //   RenderPass (MSAA, HDR half-float)
 //   → VolumetricShaftPass  (raymarched sunbeams through the windows, depth-aware, half-res)
@@ -257,7 +258,7 @@ export class RenderPipeline {
   setQuality(name) {
     this.quality = QUALITY[name] || QUALITY.high;
     this.renderer.shadowMap.enabled = this.quality.shadows;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality.pixelRatio));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality.pixelRatio) * (settings.renderScale || 1));
     this.build();
     this.scene.traverse((o) => {
       if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true));

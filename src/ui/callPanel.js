@@ -45,7 +45,8 @@ export class CallPanel {
       if (typingInField() || e.repeat) return;
       if (e.code === (settings.pttKey || 'KeyV') && this.calls.active) {
         e.preventDefault();
-        this.startTalk();
+        if (settings.pttToggle && this.talking) this.stopTalk();
+        else this.startTalk();
       }
       if (e.code === 'KeyF' && this.calls.state === 'ringing' && this.game.playing && !this.game.paused) this.calls.answer();
       if (e.code === 'Enter' && this.calls.active && this.input && document.activeElement !== this.input) {
@@ -55,7 +56,7 @@ export class CallPanel {
       }
     });
     document.addEventListener('keyup', (e) => {
-      if (e.code === (settings.pttKey || 'KeyV') && this.talking) this.stopTalk();
+      if (e.code === (settings.pttKey || 'KeyV') && this.talking && !settings.pttToggle) this.stopTalk();
     });
     setInterval(() => this.tick(), 80);
   }

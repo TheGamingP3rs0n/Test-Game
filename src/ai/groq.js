@@ -13,7 +13,7 @@
 //   chat: openai/gpt-oss-20b            — callers, boss (fallbacks below)
 //   tts:  canopylabs/orpheus-v1-english — voices (max 200 chars/request)
 //   stt:  whisper-large-v3              — your microphone
-import { settings, hasApiKey } from '../core/store.js';
+import { settings, hasApiKey, apiKey } from '../core/store.js';
 import { bus } from '../core/bus.js';
 
 const BASE = 'https://api.groq.com/openai/v1';
@@ -158,7 +158,7 @@ export function chatBudgetLow() {
 }
 
 function headers(json = true) {
-  const h = { Authorization: `Bearer ${settings.apiKey.trim()}` };
+  const h = { Authorization: `Bearer ${apiKey()}` };
   if (json) h['Content-Type'] = 'application/json';
   return h;
 }

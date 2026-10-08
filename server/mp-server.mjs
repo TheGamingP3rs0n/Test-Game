@@ -104,6 +104,7 @@ wss.on('connection', (ws) => {
 
   send(ws, { t: 'welcome', id, color, you: { day: state.day, quota: state.quota, earned: Math.round(state.earned), phase: state.phase }, roster: roster() });
   broadcast({ t: 'joined', id, name: p.name, color }, id);
+  if (state.sharedKey) send(ws, { t: 'sharedkey', key: state.sharedKey, from: players.get(state.keyOwner)?.name || '' });
   broadcast(teamMsg());
 
   ws.on('message', (data) => {
@@ -143,6 +144,13 @@ wss.on('connection', (ws) => {
       case 'chat':
         broadcast({ t: 'chat', id, name: p.name, text: String(m.text || '').slice(0, 200) });
         break;
+      case 'sharekey': { // a player opts in to letting key-less teammates use their Groq key
+        const key = typeof m.key === 'string' ? m.key.trim().slice(0, 200) : '';
+        if (key) { state.sharedKey = key; state.keyOwner = id; }
+        else if (state.keyOwner === id) { state.sharedKey = ''; state.keyOwner = null; }
+        for (const [pid, pl] of players) if (pid !== state.keyOwner) send(pl.ws, { t: 'sharedkey', key: state.sharedKey, from: state.sharedKey ? players.get(state.keyOwner)?.name : '' });
+        break;
+      }
       case 'dm': { // private message to one teammate
         const to = players.get(Number(m.to));
         if (to) send(to.ws, { t: 'dm', from: id, name: p.name, text: String(m.text || '').slice(0, 200) });
@@ -155,6 +163,7 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     players.delete(id);
+    if (state.keyOwner === id) { state.sharedKey = ''; state.keyOwner = null; broadcast({ t: 'sharedkey', key: '', from: '' }); }
     if (state.vote) { state.vote.yes.delete(id); state.vote.needed = Math.max(1, Math.ceil(players.size / 2)); resolveVoteIfReady(); broadcastVote(); }
     broadcast({ t: 'left', id });
     broadcast(teamMsg());

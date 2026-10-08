@@ -2,7 +2,7 @@
 // vote banner. Talks to the server through net (src/net/net.js) and drives the game's
 // co-op hooks. Everything is LAN — players on the same Wi-Fi connect to the host.
 import { el } from '../core/util.js';
-import { settings, updateSettings } from '../core/store.js';
+import { settings, updateSettings, session } from '../core/store.js';
 import { bus } from '../core/bus.js';
 import { sfx, unlockAudio } from '../core/audio.js';
 import { net, toWsUrl } from '../net/net.js';
@@ -90,19 +90,26 @@ export function openMultiplayer(screens, game, { onClose } = {}) {
   };
   const renderLobby = () => {
     renderRoster();
+    const ownKey = (settings.apiKey || '').trim().length > 10;
+    const share = el('label.mp-share', el('input', { type: 'checkbox', checked: !!settings.shareKey && ownKey, disabled: !ownKey, onchange: (e) => { updateSettings({ shareKey: e.target.checked }); net.shareKey(e.target.checked ? settings.apiKey : ''); sfx('click'); } }),
+      el('div', el('b', 'Share my Groq key with the team'), el('span', ownKey ? 'Teammates without their own key can use yours for AI callers this session. Off by default — their usage counts against your free tier. Anyone with their own key keeps using theirs.' : 'Add your own Groq key in Settings to be able to share it.')));
+    if (settings.shareKey && ownKey) net.shareKey(settings.apiKey);
+    const keyInfo = session.sharedKey && !ownKey ? el('div.mp-keyinfo', icon('key'), `Using ${session.sharedBy || 'a teammate'}'s shared Groq key this session.`) : null;
     body.replaceChildren(
       el('div.mp-head', icon('users'), el('h2', 'Lobby'), el('p.muted', 'Waiting for the team. Anyone can start the shift when everyone is in.')),
       el('div.mp-lobby', el('div.mp-roster-head', 'Call floor'), list),
+      share, keyInfo,
       el('div.mp-actions',
         el('button.btn.ghost', { onclick: () => (net.disconnect(), mode = 'home', render()) }, 'Leave'),
         el('button.btn.big.primary', { onclick: () => (unlockAudio(), sfx('click'), net.startShift()) }, 'Start shift ▶')));
   };
 
   const offRoster = bus.on('net:roster', (r) => mode === 'lobby' && renderRoster(r));
+  const offKey = bus.on('net:sharedkey', () => mode === 'lobby' && renderLobby());
   const offClose = bus.on('net:close', () => { if (mode === 'lobby') { mode = 'home'; render(); toast('Disconnected from the host.', 'warn', 5000, { icon: 'wifi-off' }); } });
   render();
 
-  const m = modal(body, { className: 'mp-modal', onClose: () => { offRoster(); offClose(); if (!game.mp) net.disconnect(); onClose?.(); } });
+  const m = modal(body, { className: 'mp-modal', onClose: () => { offRoster(); offClose(); offKey(); if (!game.mp) net.disconnect(); onClose?.(); } });
   // when the shift starts, close the lobby
   const offStart = bus.on('net:start', () => m.close());
   const origClose = m.close;
@@ -122,6 +129,7 @@ export function initCoop(game) {
   });
   bus.on('net:notice', (text) => toast(text, 'warn', 4000, { icon: 'info' }));
   bus.on('net:chat', (m) => { if (m.id !== net.id) toast(m.text, 'info', 4000, { icon: 'chat', title: `${m.name} · #team` }); });
+  bus.on('net:sharedkey', (m) => { if (!(settings.apiKey || '').trim()) toast(m.on ? `${m.from} shared their Groq key — AI callers are on.` : 'The shared Groq key was withdrawn. Offline callers until you add your own key.', m.on ? 'info' : 'warn', 5000, { icon: 'key' }); });
   bus.on('net:dm', (m) => toast(m.text, 'info', 4500, { icon: 'chat', title: `${m.name} (private)` }));
   bus.on('net:close', () => {
     if (game.mp) {

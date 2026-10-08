@@ -23,7 +23,7 @@ class World {
     this.canvas = canvas;
     this.quality = QUALITY[settings.graphics] || QUALITY.high;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality.pixelRatio));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality.pixelRatio) * (settings.renderScale || 1));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.72;
@@ -60,6 +60,7 @@ class World {
     bus.on('settings:changed', (s, patch) => {
       if ('graphics' in patch) this.setQuality(s.graphics);
       if ('fov' in patch) this.setFov(s.fov);
+      if ('renderScale' in patch) this.resize();
       this.frozenFrames = 0; // re-render once if a setting changes while paused
     });
 
@@ -186,6 +187,9 @@ class World {
 
   frame() {
     const now = performance.now();
+    // optional frame-rate cap (Display settings)
+    if (settings.fpsCap > 0 && now - (this.lastRenderAt || 0) < 1000 / settings.fpsCap - 0.5) return;
+    this.lastRenderAt = now;
     const dt = Math.min(0.05, (now - this.lastTime) / 1000);
     this.lastTime = now;
     this.frameNo++;
