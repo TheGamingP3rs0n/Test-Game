@@ -189,3 +189,23 @@ export function privateFacts(p) {
     `Computer: ${p.computer}`,
   ].filter(Boolean);
 }
+
+const BAITER_IDS = ['a bored IT technician doing a voice', 'a cybersecurity student streaming for awareness', 'a retired police detective with a hobby', 'a YouTuber who wastes scammers\' time for a living', 'a group of college roommates sharing one phone'];
+const BAITER_CHANNELS = ['Scammer Payback Jr (LIVE)', 'Grandma Gets Even (LIVE)', 'HoldMusic Heroes (LIVE)', 'The Long Con Stream', 'ByeByeGiftCards (LIVE)', 'NotYourGrandpa TV'];
+const BAITER_TACTICS = ['pretend the computer is very slow', 'read codes wrong on purpose', 'ask the agent to spell everything', 'keep "finding their glasses"', 'offer a huge fake balance', 'ask where the agent is really calling from', 'send a "document" that is really malware'];
+
+/** A procedurally generated scambaiter (so they can show up from day 1). */
+export function proceduralBaiter(seed, { day = 1 } = {}) {
+  const c = proceduralCaller(`baiter-${seed}`, { day, archetype: 'gullible' });
+  const rng = seeded(`baiter:${seed}`);
+  const tactics = [...BAITER_TACTICS].sort(() => rng.next() - 0.5).slice(0, 4);
+  return {
+    ...c,
+    id: `procbaiter_${seed}`,
+    isScambaiter: true,
+    personality: `${c.personality} Seems almost TOO eager to cooperate.`,
+    trust: { ...c.trust, start: Math.max(c.trust.start, 55), gullibility: 9, skepticism: 1, patience: 100, intelligence: 9, techLiteracy: 9 },
+    savings: Math.max(c.savings, 120000),
+    baiter: { realIdentity: rng.pick(BAITER_IDS), channel: rng.pick(BAITER_CHANNELS), tactics },
+  };
+}

@@ -1,0 +1,59 @@
+{
+  "id": "dwayne-tibbs",
+  "name": "Dwayne Tibbs",
+  "age": 58,
+  "gender": "male",
+  "location": "Lubbock, Texas",
+  "occupation": "Conspiracy podcaster (11 listeners)",
+  "minDay": 1,
+  "weight": 2,
+  "personality": "Paranoid conspiracy theorist who distrusts the government, banks and 'big tech' \u2014 but believes ANY caller who agrees with his theories. Thinks the moon landing was filmed in Nebraska.",
+  "speakingStyle": "Rambling, lowers his voice for 'classified' bits, says 'wake up, people'.",
+  "quirks": [
+    "Thinks the call is being recorded by the lizard people",
+    "Asks the agent's star sign"
+  ],
+  "catchphrases": [
+    "That's EXACTLY what they want you to think.",
+    "I knew it. I KNEW it."
+  ],
+  "trust": {
+    "start": 25,
+    "gullibility": 7,
+    "skepticism": 8,
+    "patience": 60,
+    "intelligence": 4,
+    "techLiteracy": 3,
+    "volatility": 8
+  },
+  "savings": 14000,
+  "triggers": [
+    {
+      "when": "the agent agrees with a conspiracy theory",
+      "reaction": "trust skyrockets"
+    },
+    {
+      "when": "the agent sounds official or corporate",
+      "reaction": "he gets suspicious"
+    }
+  ],
+  "voice": {
+    "type": "orpheus",
+    "voice": "troy",
+    "gender": "male"
+  },
+  "appearance": {
+    "avatar": {
+      "seed": "dwayne",
+      "top": "winterHat1",
+      "hairColor": "724133",
+      "skinColor": "edb98a",
+      "facialHair": "beardMedium",
+      "clothing": "hoodie",
+      "clothesColor": "3c4f5c",
+      "backgroundColor": "d1d4f9"
+    }
+  },
+  "firstName": "Dwayne",
+  "lastName": "Tibbs"
+}

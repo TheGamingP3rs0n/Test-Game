@@ -120,6 +120,9 @@ class Net {
   dm(to, text) {
     this.send({ t: 'dm', to, text });
   }
+  rtc(to, data) {
+    this.send({ t: 'rtc', to, data });
+  }
   /** Offer (or withdraw, with '') your Groq key to teammates who have none. */
   shareKey(key) {
     this.send({ t: 'sharekey', key: key || '' });
@@ -182,6 +185,9 @@ class Net {
         break;
       case 'dm':
         bus.emit('net:dm', m);
+        break;
+      case 'rtc':
+        bus.emit('net:rtc', m);
         break;
       case 'sharedkey':
         session.sharedKey = m.key || '';

@@ -151,6 +151,11 @@ wss.on('connection', (ws) => {
         for (const [pid, pl] of players) if (pid !== state.keyOwner) send(pl.ws, { t: 'sharedkey', key: state.sharedKey, from: state.sharedKey ? players.get(state.keyOwner)?.name : '' });
         break;
       }
+      case 'rtc': { // WebRTC signalling for proximity voice (offer/answer/ICE), peer to peer
+        const to = players.get(Number(m.to));
+        if (to && m.data) send(to.ws, { t: 'rtc', from: id, data: m.data });
+        break;
+      }
       case 'dm': { // private message to one teammate
         const to = players.get(Number(m.to));
         if (to) send(to.ws, { t: 'dm', from: id, name: p.name, text: String(m.text || '').slice(0, 200) });

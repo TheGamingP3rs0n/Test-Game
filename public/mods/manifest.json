@@ -14,7 +14,13 @@
     "callers/florence-pike.json",
     "callers/derek-nguyen.json",
     "callers/agnes-baiter.json",
-    "callers/bob-baiter.json"
+    "callers/bob-baiter.json",
+    "callers/pearl-okafor.json",
+    "callers/dwayne-tibbs.json",
+    "callers/sienna-hart.json",
+    "callers/walter-frisk.json",
+    "callers/kayla-baiter.json",
+    "callers/marcus-baiter.json"
   ],
   "scenarios": [
     "scenarios/tech-support.json",
@@ -24,7 +30,10 @@
     "scenarios/delivery.json",
     "scenarios/lottery.json",
     "scenarios/crypto.json",
-    "scenarios/security-specialist.json"
+    "scenarios/security-specialist.json",
+    "scenarios/moon-timeshare.json",
+    "scenarios/cursed-warranty.json",
+    "scenarios/prince-rajesh.json"
   ],
   "events": [
     "events/core-disasters.json",

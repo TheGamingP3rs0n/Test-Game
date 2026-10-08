@@ -1,0 +1,27 @@
+{
+  "id": "cursed-warranty",
+  "name": "The Cursed Car Warranty",
+  "impersonate": "Warranty Specialist (and part-time exorcist) at AutoShield Spirits",
+  "leadSource": "Robocall: 'We've been trying to reach you about your car's extended warranty\u2026 and its CURSE.'",
+  "callerContext": "You keep getting calls about your car's extended warranty. This time they said your car is also 'spiritually compromised'. Your check-engine light IS on.",
+  "unlockDay": 1,
+  "payout": 1.1,
+  "icon": "\ud83d\ude97",
+  "playbook": [
+    "Open with the classic 'extended warranty' line, totally deadpan.",
+    "Slowly reveal the car is haunted.",
+    "Offer the 'Spiritual Protection Plan' upgrade.",
+    "Ask for the 'cleansing fee' to keep the ghosts away."
+  ],
+  "keywords": [
+    "warranty",
+    "car",
+    "vehicle",
+    "curse",
+    "haunted",
+    "ghost",
+    "extended",
+    "protection"
+  ],
+  "scamApp": "creditcard"
+}

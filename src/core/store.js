@@ -51,6 +51,8 @@ export const DEFAULT_SETTINGS = {
   lastSeenLatest: null,
   // co-op
   shareKey: false,
+  proxVoice: true, // proximity voice chat in co-op (hold voiceKey)
+  voiceKey: 'KeyB',
 };
 
 function load(key, fallback) {

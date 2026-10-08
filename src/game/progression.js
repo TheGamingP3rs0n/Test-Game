@@ -5,7 +5,7 @@ export function quotaFor(day) {
 }
 
 export function baiterChanceFor(day) {
-  if (day <= 1) return 0.08;
+  if (day <= 1) return 0.12;
   return Math.min(0.35, 0.12 + day * 0.035);
 }
 

@@ -87,6 +87,7 @@ export function openSettings({ onClose } = {}) {
           };
           document.addEventListener('keydown', h, true);
         } }, 'Change')), 'Hold it while talking. You can also hold the big mic button.'),
+        field('Proximity voice (co-op)', check('proxVoice', 'Hold B to talk to teammates near you — muffled through walls'), 'Peer-to-peer over your Wi-Fi. The mic only opens while you hold B.'),
         field('Mic check', el('button.btn.small', { onclick: async () => {
           try {
             const s = await navigator.mediaDevices.getUserMedia({ audio: true });

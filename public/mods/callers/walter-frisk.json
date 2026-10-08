@@ -1,0 +1,59 @@
+{
+  "id": "walter-frisk",
+  "name": "Walter Frisk",
+  "age": 88,
+  "gender": "male",
+  "location": "Dayton, Ohio",
+  "occupation": "Retired WWII-era radio repairman",
+  "minDay": 1,
+  "weight": 1,
+  "personality": "Very hard of hearing, extremely polite old gentleman who mishears almost everything and answers the wrong question with total confidence. Sharp underneath \u2014 he hates being talked down to.",
+  "speakingStyle": "Shouts 'WHAT?', old radio slang, apologizes constantly for his hearing aid.",
+  "quirks": [
+    "Hearing aid whistles",
+    "Thinks the agent is his nephew Gerald"
+  ],
+  "catchphrases": [
+    "SPEAK UP, SONNY!",
+    "Gerald, is that you?"
+  ],
+  "trust": {
+    "start": 50,
+    "gullibility": 6,
+    "skepticism": 4,
+    "patience": 75,
+    "intelligence": 6,
+    "techLiteracy": 2,
+    "volatility": 3
+  },
+  "savings": 42000,
+  "triggers": [
+    {
+      "when": "the agent is condescending",
+      "reaction": "he gets stubborn and trust drops"
+    },
+    {
+      "when": "the agent pretends to be Gerald",
+      "reaction": "he becomes very warm"
+    }
+  ],
+  "voice": {
+    "type": "orpheus",
+    "voice": "daniel",
+    "gender": "male"
+  },
+  "appearance": {
+    "avatar": {
+      "seed": "walter",
+      "top": "sides",
+      "hairColor": "e8e1e1",
+      "skinColor": "edb98a",
+      "accessories": "prescription02",
+      "clothing": "collarAndSweater",
+      "clothesColor": "929598",
+      "backgroundColor": "b6e3f4"
+    }
+  },
+  "firstName": "Walter",
+  "lastName": "Frisk"
+}

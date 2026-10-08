@@ -82,12 +82,12 @@ export class Office {
     await preload([
       ...FURNITURE.map((n) => ['furniture', n]),
       ...[CHARACTERS.boss, CHARACTERS.police, ...CHARACTERS.coworkers.slice(0, COWORKER_COUNT)].map((n) => ['characters', n]),
-      ['vehicles', 'police'], ['vehicles', 'taxi'], ['vehicles', 'van'], ['animals', 'animal-cow'], ['food', 'cup-tea'], ['food', 'pizza-box'], ['food', 'mug'],
+      ['vehicles', 'police'], ['vehicles', 'taxi'], ['vehicles', 'van'], ['vehicles', 'delivery'], ['vehicles', 'ambulance'], ['animals', 'animal-cow'], ['food', 'cup-tea'], ['food', 'pizza-box'], ['food', 'mug'],
     ], (p) => onProgress(p * 0.6));
     // build in steps, letting the browser breathe (and the loading bar move) in between
     const steps = [
       () => this.buildShell(), () => this.buildOutside(), () => this.buildWalls(), () => this.buildLights(), () => this.buildDesks(),
-      () => this.buildKitchen(), () => this.buildBossOffice(), () => this.buildAmenities(), () => this.buildProps(), () => this.buildDecor(), () => this.buildCharacters(),
+      () => this.buildKitchen(), () => this.buildBossOffice(), () => this.buildAmenities(), () => this.buildStairwell(), () => this.buildStreetLife(), () => this.buildProps(), () => this.buildDecor(), () => this.buildCharacters(),
     ];
     for (let i = 0; i < steps.length; i++) {
       await steps[i]();
@@ -121,7 +121,9 @@ export class Office {
 
     this.colliders.push(
       { minX: -99, maxX: ROOM.minX + 0.15, minZ: -99, maxZ: ROOM.maxZ },
-      { minX: ROOM.maxX - 0.15, maxX: 99, minZ: -99, maxZ: ROOM.maxZ },
+      // right wall, with a gap at the EXIT doorway (z≈3) into the stairwell
+      { minX: ROOM.maxX - 0.15, maxX: ROOM.maxX + 0.1, minZ: -99, maxZ: 2.5 },
+      { minX: ROOM.maxX - 0.15, maxX: ROOM.maxX + 0.1, minZ: 3.5, maxZ: ROOM.maxZ },
       { minX: -99, maxX: 99, minZ: -99, maxZ: ROOM.minZ + 0.15 },
       // back wall of the MAIN room, with a doorway gap (X[-1,1]) through to the back wing
       { minX: -99, maxX: -1.0, minZ: ROOM.maxZ - 0.15, maxZ: ROOM.maxZ + 0.1 },
@@ -688,6 +690,123 @@ export class Office {
     mirror.position.set(-2.69, 1.45, 9.6); mirror.rotation.y = -Math.PI / 2; this.root.add(mirror);
   }
 
+  // Traffic on the street out front (two lanes), trees and lamps on the sidewalk, and an
+  // occasional car through the back alley behind the break room.
+  async buildStreetLife() {
+    const GY = -3.2; // street level
+    this.traffic = [];
+    const kinds = ['taxi', 'van', 'delivery', 'taxi', 'van', 'taxi', 'ambulance', 'delivery'];
+    const lanes = [{ z: -11.2, dir: 1 }, { z: -13.0, dir: -1 }];
+    for (let i = 0; i < kinds.length; i++) {
+      const lane = lanes[i % 2];
+      const car = pivot(await instance('vehicles', kinds[i], { scale: 1.2 }), { x: 0, y: GY, z: lane.z, rotY: lane.dir > 0 ? Math.PI / 2 : -Math.PI / 2 });
+      car.userData.lane = lane;
+      car.userData.speed = 6 + Math.random() * 6;
+      car.position.x = -46 + Math.random() * 92;
+      car.userData.wait = 0;
+      this.root.add(car);
+      this.traffic.push(car);
+    }
+    // back alley (seen through the break-room windows)
+    const alleyCar = pivot(await instance('vehicles', 'taxi', { scale: 1.1 }), { x: -20, y: 0, z: 21.5, rotY: Math.PI / 2 });
+    alleyCar.userData.lane = { z: 21.5, dir: 1 }; alleyCar.userData.speed = 4; alleyCar.userData.wait = 6; alleyCar.userData.range = 22;
+    this.root.add(alleyCar);
+    this.traffic.push(alleyCar);
+    const alley = new THREE.Mesh(new THREE.PlaneGeometry(60, 5), M.matte(0x3d3a36));
+    alley.rotation.x = -Math.PI / 2; alley.position.set(5, 0.004, 21.5); this.root.add(alley);
+    // sidewalk trees + street lamps
+    const trunk = M.matte(0x5a4030);
+    const leaves = [M.matte(0x3f8a3a), M.matte(0x4d9a42), M.matte(0x367a33)];
+    const lampMat = M.metal(0x2c2f33, 0.4);
+    for (let x = -34; x <= 34; x += 8.5) {
+      const t = new THREE.Group();
+      box(0.22, 2.2, 0.22, trunk, [0, 1.1, 0], t, { cast: false });
+      const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.25, 0), leaves[Math.abs(Math.round(x)) % 3]);
+      crown.position.y = 2.9; crown.scale.set(1, 0.9, 1); t.add(crown);
+      t.position.set(x, GY, -8.6); this.root.add(t);
+      const lamp = new THREE.Group();
+      box(0.12, 4.2, 0.12, lampMat, [0, 2.1, 0], lamp, { cast: false });
+      box(0.9, 0.08, 0.12, lampMat, [0.4, 4.15, 0], lamp, { cast: false });
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.25), new THREE.MeshStandardMaterial({ color: 0xfff1c4, emissive: 0xffd98a, emissiveIntensity: 1.2 }));
+      head.position.set(0.75, 4.08, 0); lamp.add(head);
+      lamp.position.set(x + 4.2, GY, -8.9); lamp.rotation.y = -Math.PI / 2; this.root.add(lamp);
+    }
+  }
+
+  updateTraffic(dt) {
+    if (!this.traffic) return;
+    for (const car of this.traffic) {
+      const u = car.userData;
+      if (u.wait > 0) { u.wait -= dt; car.visible = u.wait <= 0; continue; }
+      car.visible = true;
+      car.position.x += u.lane.dir * u.speed * dt;
+      const range = u.range || 46;
+      if (Math.abs(car.position.x) > range) {
+        // drive off, then respawn at the other end after a pause, at a new speed
+        car.position.x = -u.lane.dir * range;
+        u.speed = (u.range ? 3 : 6) + Math.random() * (u.range ? 3 : 7);
+        u.wait = u.range ? 8 + Math.random() * 14 : Math.random() * 4;
+        car.visible = false;
+      }
+    }
+  }
+
+  // Behind the EXIT door: a stairwell landing with stairs down to the street. Taking the
+  // stairs lets you leave work (clock out early).
+  buildStairwell() {
+    const H = ROOM.height;
+    const X0 = ROOM.maxX, X1 = 12.6, Z0 = 1.5, Z1 = 4.5;
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xcfc7b4, roughness: 0.85, envMapIntensity: 0.3 });
+    const stepMat = new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.9 });
+    const railMat = M.metal(0xd8b23a, 0.35);
+    const landingEnd = 10.5;
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x7c776d, roughness: 0.95 });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(landingEnd - X0, Z1 - Z0), floorMat);
+    floor.rotation.x = -Math.PI / 2; floor.position.set((X0 + landingEnd) / 2, 0.002, (Z0 + Z1) / 2); floor.receiveShadow = true; this.root.add(floor);
+    const pit = new THREE.Mesh(new THREE.PlaneGeometry(X1 - landingEnd, Z1 - Z0), floorMat);
+    pit.rotation.x = -Math.PI / 2; pit.position.set((landingEnd + X1) / 2, -2.2, (Z0 + Z1) / 2); this.root.add(pit);
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0, Z1 - Z0), this.ceilMat);
+    ceil.rotation.x = Math.PI / 2; ceil.position.set((X0 + X1) / 2, H, (Z0 + Z1) / 2); this.root.add(ceil);
+    // walls: two sides + far end (with a window), all solid for movement
+    const D = 2.3; // walls run below the landing so the stairwell has depth
+    box(X1 - X0, H + D, 0.16, wallMat, [(X0 + X1) / 2, (H - D) / 2, Z0], this.root, { cast: false });
+    box(X1 - X0, H + D, 0.16, wallMat, [(X0 + X1) / 2, (H - D) / 2, Z1], this.root, { cast: false });
+    box(0.16, 0.9 + D, Z1 - Z0, wallMat, [X1, (0.9 - D) / 2, (Z0 + Z1) / 2], this.root, { cast: false });
+    box(0.16, D, Z1 - Z0, wallMat, [landingEnd - 0.02, -D / 2, (Z0 + Z1) / 2], this.root, { cast: false }); // landing edge face
+    box(0.16, 0.7, Z1 - Z0, wallMat, [X1, H - 0.35, (Z0 + Z1) / 2], this.root, { cast: false });
+    box(0.04, H - 1.6, Z1 - Z0 - 0.3, M.glass(0xbcd6e6, 0.14), [X1, 0.9 + (H - 1.6) / 2, (Z0 + Z1) / 2], this.root, { cast: false });
+    // stairs going down (toward the far end) — a solid flight you look down into
+    for (let i = 0; i < 9; i++) {
+      const x = landingEnd + 0.24 * i + 0.12;
+      const top = -0.19 * (i + 1);
+      const blk = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.19, 1.4), stepMat);
+      blk.position.set(x, top + 0.095, 3.65); blk.receiveShadow = true; this.root.add(blk);
+    }
+    box(X1 - landingEnd, 0.06, 1.5, stepMat, [(landingEnd + X1) / 2, -1.9, 2.25], this.root, { cast: false }); // lower landing hint
+    // railing along the stair edge
+    box(X1 - landingEnd, 0.05, 0.05, railMat, [(landingEnd + X1) / 2, 0.95, 2.92], this.root, { cast: false });
+    for (const x of [landingEnd, (landingEnd + X1) / 2, X1 - 0.1]) box(0.05, 0.95, 0.05, railMat, [x, 0.475, 2.92], this.root, { cast: false });
+    // colliders: side walls, far end, and the drop (you can't walk down the stairs — use E)
+    this.colliders.push(
+      { minX: X0, maxX: X1 + 0.2, minZ: Z0 - 0.2, maxZ: Z0 + 0.1 },
+      { minX: X0, maxX: X1 + 0.2, minZ: Z1 - 0.1, maxZ: Z1 + 0.2 },
+      { minX: landingEnd, maxX: X1 + 0.2, minZ: Z0, maxZ: Z1 },
+    );
+    const lp = new THREE.PointLight(0xfff1d6, 4, 6, 2); lp.position.set(10.2, H - 0.4, 3); this.rig.addAccent(lp).userData.keepOnOutage = true;
+    box(0.9, 0.05, 0.5, M.metal(0xd6d3cc, 0.35), [10.2, H - 0.03, 3], this.root, { cast: false });
+    // signage + the interactable "take the stairs"
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.34), new THREE.MeshStandardMaterial({ roughness: 0.4, map: canvasTexture(320, 100, (ctx) => {
+      ctx.fillStyle = '#1f7a3a'; ctx.fillRect(0, 0, 320, 100);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 34px "Bungee", Impact'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('STREET LEVEL', 160, 38); ctx.font = 'bold 22px Inter, Arial'; ctx.fillText('stairs down \u2193', 160, 76);
+    }) }));
+    sign.position.set(11.2, 1.9, Z0 + 0.09); this.root.add(sign);
+    // invisible hit-box over the top of the stairs (aim anywhere at the stair opening)
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.0, 2.6), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+    bar.position.set(10.75, 0.9, 3.0); this.root.add(bar);
+    this.register({ id: 'exit', object: bar, label: 'Take the stairs — leave work', radius: 1.8 });
+  }
+
   async buildProps() {
     // quota TV hanging at the front of the floor
     this.boardTex = quotaBoardTexture();
@@ -750,11 +869,38 @@ export class Office {
     this.register({ id: 'router', object: router, label: 'Wi-Fi router', radius: 2 });
 
     // shredder
+    // industrial shredder: bin with a see-through window full of strips, a silver head
+    // unit with a feed throat, control panel LEDs, warning label and casters
     const sh = new THREE.Group();
-    box(0.5, 0.7, 0.4, M.plastic(0x2d2d2d, 0.4), [0, 0.35, 0], sh);
-    box(0.52, 0.06, 0.42, M.plastic(0x111111, 0.3), [0, 0.73, 0], sh);
-    box(0.3, 0.01, 0.02, M.plastic(0x000000), [0, 0.765, 0], sh);
-    this.shredPaper = box(0.28, 0.12, 0.2, M.matte(0xf2f2f2), [0, 0.86, 0.05], sh);
+    const body = M.plastic(0x2b2f35, 0.45);
+    const trim = M.metal(0xb9bec4, 0.3);
+    box(0.56, 0.66, 0.44, body, [0, 0.38, 0], sh); // bin
+    box(0.6, 0.04, 0.48, trim, [0, 0.06, 0], sh); // base plate
+    for (const [x, z] of [[-0.24, -0.18], [0.24, -0.18], [-0.24, 0.18], [0.24, 0.18]]) {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.04, 14), M.plastic(0x111111, 0.6));
+      w.rotation.z = Math.PI / 2; w.position.set(x, 0.035, z); sh.add(w);
+    }
+    // window with shreds behind it
+    box(0.36, 0.34, 0.012, new THREE.MeshPhysicalMaterial({ color: 0x9fb8c8, transparent: true, opacity: 0.32, roughness: 0.05 }), [0, 0.36, 0.224], sh, { cast: false });
+    const shredMats = [M.matte(0xf4f1e8), M.matte(0xe9f0f7), M.matte(0xfff2c4)];
+    for (let i = 0; i < 46; i++) {
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.05 + Math.random() * 0.12, 0.004), shredMats[i % 3]);
+      strip.position.set(-0.16 + Math.random() * 0.32, 0.22 + Math.random() * 0.2, 0.1 + Math.random() * 0.1);
+      strip.rotation.set(Math.random() * 1.4, Math.random() * 3, Math.random() * 1.4);
+      sh.add(strip);
+    }
+    box(0.62, 0.16, 0.5, trim, [0, 0.79, 0], sh); // head unit
+    box(0.4, 0.02, 0.05, M.plastic(0x050505, 0.2), [0, 0.875, -0.04], sh, { cast: false }); // feed throat
+    box(0.18, 0.03, 0.1, M.plastic(0x1a1a1a, 0.3), [0.18, 0.88, 0.15], sh, { cast: false }); // control panel
+    const led = (x, c) => { const l = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.6 })); l.position.set(x, 0.9, 0.15); sh.add(l); return l; };
+    this.shredLedGreen = led(0.13, 0x33ff66); led(0.17, 0xff3344);
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.02, 14), trim); knob.position.set(0.23, 0.9, 0.15); sh.add(knob);
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.09), new THREE.MeshStandardMaterial({ roughness: 0.5, map: canvasTexture(256, 76, (ctx) => {
+      ctx.fillStyle = '#ffcc00'; ctx.fillRect(0, 0, 256, 76); ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 256, 10); ctx.fillRect(0, 66, 256, 10);
+      ctx.font = 'bold 22px Inter, Arial'; ctx.textAlign = 'center'; ctx.fillText('KEEP FINGERS OUT', 128, 34); ctx.font = 'bold 16px Inter, Arial'; ctx.fillText('SHRED-O-MATIC 9000', 128, 56);
+    }) }));
+    label.position.set(0, 0.64, 0.222); sh.add(label);
+    this.shredPaper = box(0.28, 0.1, 0.2, M.matte(0xf2f2f2), [0, 0.92, -0.05], sh); // a stack waiting to be shredded
     sh.position.set(2.6, 0, -1.2);
     this.root.add(sh);
     this.shredder = sh;
@@ -1173,6 +1319,7 @@ export class Office {
     this.fanSpeed = (this.fanSpeed ?? want) + (want - (this.fanSpeed ?? want)) * Math.min(1, dt * 0.6);
     for (const f of this.fans) f.rotation.y += dt * this.fanSpeed;
     for (const n of this.npcs) n.update(dt);
+    this.updateTraffic(dt);
     for (const c of this.coworkers) {
       c.chatter -= dt;
       if (c.chatter <= 0 && this.powered) {

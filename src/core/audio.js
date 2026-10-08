@@ -483,3 +483,9 @@ export function playVoiceBuffer(buffer, { phone = true, rate = 1, gain = 1, bus:
 }
 
 export const audioBuses = buses;
+
+/** A game-audio bus by name (master | sfx | voice | amb), creating the context if needed. */
+export function gameBus(name) {
+  audioCtx();
+  return buses[name] || buses.master;
+}

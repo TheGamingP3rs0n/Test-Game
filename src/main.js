@@ -17,13 +17,14 @@ import { Screens } from './ui/screens.js';
 import { HUD } from './ui/hud.js';
 import { CallPanel } from './ui/callPanel.js';
 import { Computer } from './ui/computer.js';
-import { initDialogs, toast } from './ui/dialog.js';
+import { initDialogs, toast, confirmDialog } from './ui/dialog.js';
 import { openSettings } from './ui/settings.js';
 import { openClientMaker } from './ui/clientMaker.js';
 import { openMods } from './ui/mods.js';
 import { openMultiplayer, initCoop } from './ui/multiplayer.js';
 import { openBossTalk } from './ui/bossTalk.js';
 import { initDisplay } from './core/display.js';
+import { voice } from './net/voice.js';
 import { autoCheck } from './core/updater.js';
 import { showReview } from './ui/review.js';
 import { showShop } from './ui/shop.js';
@@ -77,6 +78,8 @@ async function boot() {
   };
   initCoop(game);
   initDisplay();
+  voice.init(world);
+  world.onUpdate(() => voice.update());
   autoCheck().then((rel) => rel && toast(`Version ${rel.tag} is out. Open Settings → Updates to download it.`, 'info', 8000, { icon: 'download', title: 'Update available' }));
   bus.on('ui:openSettings', () => openSettings());
 
@@ -84,6 +87,15 @@ async function boot() {
     showMenu,
     hideScreens: () => screens.hide(),
     openBossTalk: () => openBossTalk(game),
+    leaveBuilding: async () => {
+      const met = game.mp ? game.mpTeam.earned >= game.mpTeam.quota : game.day.earned >= game.day.quota;
+      if (met) return game.walkOut();
+      if (game.mp) return toast('The team quota isn\'t met yet — you can\'t leave until the team votes to clock out.', 'warn', 4000, { icon: 'door' });
+      world.player.releaseLock();
+      const ok = await confirmDialog('Leave work early?', 'The quota isn\'t met. If you walk out now the day ends, uncollected codes are lost, and Mr. Chatterjee will NOT be pleased.', { ok: 'Walk out', danger: true, cancel: 'Stay' });
+      if (ok) game.walkOut();
+      else world.player.requestLock();
+    },
     showBriefing: (run, day) => {
       computer.newDay();
       screens.briefing(run, day);

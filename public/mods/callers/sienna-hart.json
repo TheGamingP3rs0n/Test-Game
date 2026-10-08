@@ -1,0 +1,55 @@
+{
+  "id": "sienna-hart",
+  "name": "Sienna Hart",
+  "age": 24,
+  "gender": "female",
+  "location": "Los Angeles, California",
+  "occupation": "Lifestyle influencer (2,300 followers)",
+  "minDay": 1,
+  "weight": 2,
+  "personality": "Self-absorbed influencer who cares only about followers, brand deals and 'going viral'. Will do almost anything if it sounds like a sponsorship or a verified badge.",
+  "speakingStyle": "Valley-girl uptalk, 'literally', 'obsessed', narrates everything for her story.",
+  "quirks": [
+    "Films the call for her story",
+    "Asks the agent to say hi to her followers"
+  ],
+  "catchphrases": [
+    "Wait, this is literally so iconic.",
+    "Is this, like, a brand deal?"
+  ],
+  "trust": {
+    "start": 40,
+    "gullibility": 7,
+    "skepticism": 3,
+    "patience": 35,
+    "intelligence": 4,
+    "techLiteracy": 7,
+    "volatility": 7
+  },
+  "savings": 6000,
+  "triggers": [
+    {
+      "when": "the agent mentions verification badges, sponsorships or going viral",
+      "reaction": "she gets hyped and trusts more"
+    }
+  ],
+  "voice": {
+    "type": "orpheus",
+    "voice": "hannah",
+    "gender": "female"
+  },
+  "appearance": {
+    "avatar": {
+      "seed": "sienna",
+      "top": "longButNotTooLong",
+      "hairColor": "d6b370",
+      "skinColor": "ffdbb4",
+      "accessories": "sunglasses",
+      "clothing": "shirtScoopNeck",
+      "clothesColor": "ffafb9",
+      "backgroundColor": "ffd5dc"
+    }
+  },
+  "firstName": "Sienna",
+  "lastName": "Hart"
+}

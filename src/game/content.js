@@ -3,7 +3,7 @@
 import { db } from '../core/db.js';
 import { settings } from '../core/store.js';
 import { pick, chance, uid } from '../core/util.js';
-import { proceduralCaller, buildProfile } from './profile.js';
+import { proceduralCaller, proceduralBaiter, buildProfile } from './profile.js';
 
 export const content = {
   callers: [],
@@ -164,8 +164,11 @@ export function nextCaller({ day, seen = new Set(), baiterChance = 0.15, gullibl
   const baiters = pool.filter((c) => c.isScambaiter);
   const normals = pool.filter((c) => !c.isScambaiter);
   let def;
-  if (baiters.length && chance(baiterChance)) def = pick(baiters);
-  else if (normals.length && chance(0.62)) {
+  if (chance(baiterChance)) {
+    // hand-made scambaiters first; otherwise a procedural one, so they show up from day 1
+    def = baiters.length && chance(0.6) ? pick(baiters) : proceduralBaiter(`${day}-${Math.floor(Math.random() * 1e9)}`, { day });
+  }
+  if (def) { /* picked a scambaiter */ } else if (normals.length && chance(0.62)) {
     // weighted pick, custom clients get a little boost so you meet them
     const weighted = normals.flatMap((c) => Array(Math.max(1, Math.round((c.weight || 1) * (c.source === 'custom' ? 2 : 1) + (gullibleBias && (c.trust?.gullibility || 5) >= 7 ? gullibleBias : 0)))).fill(c));
     def = pick(weighted);

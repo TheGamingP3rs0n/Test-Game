@@ -1,0 +1,27 @@
+{
+  "id": "prince-rajesh",
+  "name": "Prince Rajesh's Inheritance",
+  "impersonate": "Royal Treasurer of Prince Rajesh of the Koi Kingdom",
+  "leadSource": "Email: 'GREETINGS ESTEEMED FRIEND, I AM PRINCE RAJESH OF THE KOI KINGDOM'",
+  "callerContext": "You got an email in ALL CAPS from a 'Prince Rajesh' who needs help moving his royal fortune \u2014 and promised you a cut. It mentioned fish a lot.",
+  "unlockDay": 1,
+  "payout": 1.4,
+  "icon": "\ud83d\udc51",
+  "playbook": [
+    "Speak with grand royal formality.",
+    "Mention the fortune is 'held up' in a pond.",
+    "Ask for a small 'royal customs fee' to release it.",
+    "Promise them a knighthood and a koi of their own."
+  ],
+  "keywords": [
+    "prince",
+    "royal",
+    "inheritance",
+    "fortune",
+    "kingdom",
+    "koi",
+    "customs",
+    "knight"
+  ],
+  "scamApp": "identity"
+}

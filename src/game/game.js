@@ -10,7 +10,7 @@ import { CallManager } from './callManager.js';
 import { ChaosManager, bindChaosGame } from './chaos.js';
 import { sfx, startLoop, stopLoop, stopAllLoops, pauseGameAudio, resumeGameAudio } from '../core/audio.js';
 import { music } from '../core/music.js';
-import { money, clamp, pick } from '../core/util.js';
+import { money, clamp, pick, clockText } from '../core/util.js';
 import { scriptedMessage } from '../ai/coworkers.js';
 import { speaker } from '../ai/speech.js';
 import { net } from '../net/net.js';
@@ -167,9 +167,11 @@ export const game = {
     const caller = nextCaller({
       day: this.day.day,
       seen: new Set(this.day.seenCallers),
-      baiterChance: baiterChanceFor(this.day.day) * (upgradeLevel(this.run, 'leads') ? 0.7 : 1),
+      // a guaranteed-ish scambaiter: if none has called by the 4th call of the day, odds jump
+      baiterChance: (this.day.callsTaken >= 4 && !this.day.baiterSeen ? 0.5 : baiterChanceFor(this.day.day)) * (upgradeLevel(this.run, 'leads') ? 0.7 : 1),
       gullibleBias: upgradeLevel(this.run, 'leads') ? 2 : 0,
     });
+    if (caller.isScambaiter) this.day.baiterSeen = true;
     this.calls.ring(caller);
   },
 
@@ -330,6 +332,17 @@ export const game = {
   },
 
   /** Player-initiated early end of day (the Clock Out button; only when quota is met). */
+  /** Take the stairs out: a proper clock-out if quota is met, otherwise walking out early. */
+  walkOut() {
+    if (this.phase !== 'playing' || !this.day) return;
+    const met = this.mp ? this.mpTeam.earned >= this.mpTeam.quota : this.day.earned >= this.day.quota;
+    if (met || this.mp) return this.clockOut();
+    if (this.calls.state === 'ringing') this.calls.decline();
+    sfx('lose');
+    this.addHighlight(`Walked out down the stairs at ${clockText(this.clock)} with the quota NOT met.`, true);
+    this.endDay();
+  },
+
   clockOut() {
     if (this.phase !== 'playing' || !this.day) return;
     if (this.mp) {
@@ -496,6 +509,8 @@ export const game = {
         return say(pick(['Mr. Chatterjee (through the glass): "GO AWAY. QUOTA." (Walk in and press E on him if you dare.)', 'Mr. Chatterjee: "Unless you are bringing money or samosas, DO NOT KNOCK." (You could just walk in…)']));
       case 'boss':
         return this.ui.openBossTalk?.();
+      case 'exit':
+        return this.ui.leaveBuilding?.();
       case 'breaker':
         return say('All breakers are on. The wiring is held together by hope and tape.', 'zap');
       case 'router':
