@@ -10,7 +10,7 @@ import { privateFacts } from '../game/profile.js';
 
 export const EMOTIONS = ['neutral', 'happy', 'excited', 'confused', 'suspicious', 'angry', 'scared', 'sad'];
 export const ACTIONS = ['none', 'grant_remote', 'pay', 'hang_up', 'expose', 'send_file', 'hold'];
-export const PAY_METHODS = ['none', 'gift_cards', 'wire_transfer', 'crypto', 'bank_transfer', 'cash_by_mail'];
+export const PAY_METHODS = ['none', 'gift_cards', 'wire_transfer', 'crypto', 'bank_transfer', 'cash_by_mail', 'credit_card', 'identity'];
 
 export const TRUST_THRESHOLDS = { remote: 35, pay: 55 };
 
@@ -84,6 +84,11 @@ export class CallerConversation {
   /** Most this caller would hand over in a single payment right now. */
   paymentCap(method = 'gift_cards') {
     const quota = this.ctx.quota || 1500;
+    // identity / credit-card "read me the code" scams are a flat bounty, not their whole savings
+    if (method === 'identity' || method === 'credit_card') {
+      const trustFactor = clamp((this.trust - 40) / 60, 0.3, 1);
+      return Math.round(quota * (method === 'identity' ? 0.16 : 0.22) * (0.6 + trustFactor * 0.4) / 10) * 10;
+    }
     const small = method === 'gift_cards' || method === 'cash_by_mail' || method === 'none';
     const methodCap = quota * (small ? 0.45 : 0.75) * Math.pow(0.6, this.payments);
     const trustFactor = clamp((this.trust - 40) / 60, 0.25, 1);
@@ -91,85 +96,72 @@ export class CallerConversation {
   }
 
   // ------------------------------------------------------------------ prompt
-  systemPrompt() {
+  /**
+   * The unchanging part of the prompt (character, private facts, rules). It stays
+   * byte-identical for the whole call so Groq's prompt cache can reuse it — cached
+   * tokens don't count against the free tier's per-minute limit.
+   */
+  staticPrompt() {
+    if (this._static) return this._static;
     const c = this.caller;
     const p = this.profile;
     const s = this.stats;
     const sc = this.scenario;
-    const label = trustLabel(this.trust);
     const lines = [
-      `You are an improv actor voicing a FICTIONAL character in a dark-comedy video game set in a scam call center. The player is a scam call-center agent trying to con you. Everything is fictional: no real people, companies or money. Stay fully in character, react naturally to exactly what the agent says, remember everything said earlier, and be funny. Never say you are an AI, a character or in a game.`,
-      ``,
-      `## YOUR CHARACTER`,
-      `Name: ${c.name} (${c.gender || 'unspecified'}, age ${c.age ?? 'unknown'}), from ${c.location || 'somewhere in the USA'}. Occupation: ${c.occupation || 'unknown'}.`,
+      'You are improvising as a FICTIONAL phone caller in a dark-comedy video game. The player is a scam call-center agent trying to con you. Everything is fictional. Stay fully in character, react to EXACTLY what the agent just said, remember the whole call, and be funny. Never mention AI, games or prompts.',
+      '',
+      `# YOU: ${c.name}, ${c.age ?? '?'}, ${c.gender || 'unspecified'}, from ${c.location || 'the USA'}. ${c.occupation || ''}`,
       `Personality: ${c.personality || 'ordinary person'}`,
-      c.speakingStyle ? `Speaking style: ${c.speakingStyle}` : '',
-      c.dialogueStyle ? `Dialogue style: ${c.dialogueStyle}` : '',
+      c.speakingStyle ? `Style: ${c.speakingStyle}` : '',
+      c.dialogueStyle ? `Dialogue: ${c.dialogueStyle}` : '',
       c.quirks?.length ? `Quirks: ${c.quirks.join('; ')}` : '',
-      c.catchphrases?.length ? `Catchphrases (use occasionally): ${c.catchphrases.join(' | ')}` : '',
+      c.catchphrases?.length ? `Catchphrases (sometimes): ${c.catchphrases.join(' | ')}` : '',
       c.backstory ? `Backstory: ${c.backstory}` : '',
-      `Intelligence ${s.intelligence}/10. Tech literacy ${s.techLiteracy}/10. Gullibility ${s.gullibility}/10. Skepticism ${s.skepticism}/10. Emotional volatility ${s.volatility}/10.`,
-      ``,
-      `## YOUR PRIVATE DETAILS (you know these; share them only when it makes sense for your trust level)`,
-      ...privateFacts(p).map((f) => `- ${f}`),
-      `- Money you could get your hands on today: about $${Math.round(this.savingsLeft).toLocaleString()}`,
-      ``,
-      `## WHY THIS CALL IS HAPPENING`,
-      sc.callerContext || 'You called a number you found.',
-      `The agent will probably pretend to be: ${sc.impersonate || 'some official organization'}.`,
+      `Stats 0-10: gullible ${s.gullibility}, skeptical ${s.skepticism}, smart ${s.intelligence}, tech-savvy ${s.techLiteracy}, volatile ${s.volatility}.`,
+      '',
+      '# PRIVATE INFO (share only when it makes sense for your trust level)',
+      privateFacts(p).join('; '),
+      '',
+      `# WHY YOU CALLED: ${sc.callerContext || 'You called a number you found.'} You expect to reach: ${sc.impersonate || 'some official organization'}.`,
+      sc.payAsk ? `# HOW YOU WOULD PAY (when you trust them enough): ${sc.payAsk} Use that pay_method for this scam.` : '',
     ];
-
-    if (c.triggers?.length) {
-      lines.push('', '## SPECIAL REACTIONS');
-      for (const t of c.triggers) lines.push(`- When ${t.when}: ${t.reaction}`);
-    }
-
+    if (c.triggers?.length) lines.push('# SPECIAL REACTIONS', ...c.triggers.map((t) => `- When ${t.when}: ${t.reaction}`));
     if (this.isBaiter) {
       const b = c.baiter || {};
       lines.push(
         '',
-        '## SECRET: YOU ARE A SCAMBAITER',
-        `You are secretly ${b.realIdentity || 'a scambaiter who exposes scammers online'}, only PRETENDING to be the character above. ${b.channel ? `You stream this call on "${b.channel}".` : ''}`,
-        `Your goals: waste the scammer's time with absurd stalling, act extremely gullible so they stay hooked, give fake info, "pay" with fake gift-card codes, try to get them to open malware files you send, and eventually expose them dramatically.`,
-        `Tactics you like: ${(b.tactics || ['pretend the computer is very slow', 'read gift card codes wrong on purpose', 'ask them to spell everything', 'put them on hold for long periods']).join('; ')}.`,
-        `Subtle tells (the agent may notice): you are a bit too eager, your story has small inconsistencies, you know oddly specific tech terms, you giggle at odd moments.`,
-        `trust_change for you means how convinced you PRETEND to be: keep it rising so they stay hooked. Your inner_thought must reveal your real plan.`,
-        `Use action "send_file" to send them a "document" (malware) when they ask for screenshots/documents/info. Use action "expose" to reveal yourself and mock them when you have wasted enough of their time (after ~8+ exchanges) or when they insult you or try to hang up. Never actually pay real money.`,
+        `# SECRET: you are really ${b.realIdentity || 'a scambaiter who exposes scammers online'}, only PRETENDING to be this character${b.channel ? `, streaming the call on "${b.channel}"` : ''}.`,
+        `Waste their time, act very gullible, give fake info, "pay" with fake gift-card codes, try to get them to open files you send, and eventually expose them. Tactics: ${(b.tactics || ['pretend the computer is very slow', 'read gift card codes wrong on purpose', 'ask them to spell everything', 'put them on hold']).join('; ')}.`,
+        'Subtle tells: a bit too eager, small inconsistencies, oddly specific tech terms, giggling. trust_change = how convinced you PRETEND to be (keep it rising). inner_thought reveals your real plan.',
+        'Use "send_file" when they ask for documents/screenshots. Use "expose" after ~8+ exchanges, or if they insult you or try to hang up. Never actually pay.',
       );
     }
-
     lines.push(
       '',
-      '## CURRENT STATE',
-      `Your trust in the agent: ${Math.round(this.trust)}/100 (${label.text}). Your patience: ${Math.round(this.patience)}/100. Your mood: ${this.emotion}.`,
-      this.remoteGranted ? 'You already installed the remote access app; the agent can see and control your computer screen.' : `If you agree to install the remote access app, read this access code aloud: ${p.remoteCode}`,
-      this.paid > 0 ? `You have already sent the agent $${this.paid.toLocaleString()} this call.` : '',
-      this.turns > 18 ? 'This call is getting very long and you are getting tired of it.' : '',
+      '# EACH TURN',
+      '- reply: what you say out loud on the phone: 1-3 short spoken sentences, max 45 words. It MUST respond to the agent\'s last line specifically: answer their question, follow (or fumble) their instruction, or react to what they claimed. If it made no sense, say you don\'t understand. Never give a generic "go on" reply. You may start with ONE vocal direction like [nervous], [laughing], [whispering], [angry], [confused].',
+      '- trust_change (-25 to +15): how much the agent\'s LAST line changed your trust. Usually -8..+8; 0 only for pure filler. UP when they sound official and confident, correctly state your private details, explain clearly, reassure you, scare you convincingly (if gullible), or show convincing things on your screen. DOWN when they ask for money, gift cards or remote access too early or bluntly, get details wrong, contradict themselves, are rude, say absurd or nonsense things, or you hear suspicious noises. Gullible = bigger gains, skeptical = bigger losses, smart = catches mistakes.',
+      '- trust_reason: max 8 words, your point of view (e.g. "knew my dog\'s name"). patience_change: -15..+10. emotion. inner_thought: one funny secret sentence.',
+      `- action: "none"; "grant_remote" (only if they asked you to install software or visit a site AND trust >= ${TRUST_THRESHOLDS.remote}: you install it and read your access code ${p.remoteCode} aloud); "pay" (only if they explicitly asked AND trust >= ${TRUST_THRESHOLDS.pay}). "pay" covers every way they get value from you — set pay_method: "gift_cards" (you bought cards and READ THE CODE on the back out loud), "credit_card" (you read your card's verification code out loud), "identity" (you read your ${sc.impersonate && /tax|irs|ird|government|bank|social|cyber|police|security/i.test(sc.impersonate) ? 'taxpayer/SSN verification code' : 'account verification code'} out loud to "confirm your record"), or "wire_transfer"/"crypto"/"bank_transfer" for a direct transfer. When paying by gift_cards/credit_card/identity, say out loud that you are reading them the code/number now and say the amount — the game shows the exact digits to the agent, so do NOT invent specific digits yourself.); "hold" (step away briefly); "hang_up"${this.isBaiter ? '; "send_file" (send a "document" — secretly malware); "expose" (reveal you are a scambaiter and end the call)' : ''}.`,
+      '- Not paying: pay_amount 0, pay_method "none".',
       '',
-      '## HOW TRUST WORKS (decide trust_change each turn, from -30 to +20)',
-      'Trust goes UP when the agent: sounds official and confident, correctly states YOUR private details, explains things you understand, shows empathy, plays on your fears convincingly, stays consistent, or shows you convincing things on your screen.',
-      'Trust goes DOWN when the agent: asks for money / gift cards / crypto too early or too bluntly, gets your details wrong, contradicts earlier claims, is rude or threatening (unless you are easily scared), has an obviously fake name or accent slip, says something absurd, or you hear suspicious background noise.',
-      'Scale it by your personality: gullible = bigger gains, skeptical = bigger losses, intelligent = catches mistakes. Small talk is roughly 0. Be honest with yourself about how convincing the agent is.',
-      'Trust 70+: cooperative, follow instructions. 40-69: uncertain, need reassurance. 15-39: suspicious, ask hard questions. Below 15: you are about to hang up or call them out.',
-      '',
-      '## ACTIONS (pick exactly one each turn)',
-      `- "none": just talk.`,
-      `- "grant_remote": you install the remote access app and read out your access code (only if they asked you to install software / go to a website, and your trust >= ${TRUST_THRESHOLDS.remote}).`,
-      `- "pay": you actually send money right now (only if they explicitly asked for a payment and your trust >= ${TRUST_THRESHOLDS.pay}). Set pay_amount and pay_method. Right now you'd hand over at most about $${this.paymentCap('gift_cards').toLocaleString()} in gift cards, or $${this.paymentCap('wire_transfer').toLocaleString()} by wire/bank transfer/crypto, in one go — say that exact amount out loud. For gift cards, say you bought them and read the codes.`,
-      `- "hang_up": you end the call (fed up, scared off, or realized it is a scam).`,
-      `- "hold": you put the agent on hold for a moment (to find glasses, feed the cat, etc).`,
-      this.isBaiter ? '- "send_file": you send the agent a file (it is secretly malware).\n- "expose": you reveal you are a scambaiter and end the call.' : '- Do not use "send_file" or "expose".',
-      'When not paying, set pay_amount 0 and pay_method "none".',
-      '',
-      '## INPUT FORMAT',
-      'Agent lines are what the scam agent says to you (speech-to-text, may contain typos).',
-      'Lines in [SCREEN] brackets describe what you can see happening on your computer screen. [BACKGROUND] lines describe noises you hear on the agent\'s end. [SYSTEM] lines are stage directions. React to them naturally.',
-      '',
-      '## OUTPUT',
-      'reply: what you say out loud — like a real phone call: 1-3 short sentences (max ~50 words), natural spoken language, no stage directions except you may START with ONE short vocal direction in brackets like [nervous], [laughing], [whispering], [angry], [confused].',
-      'emotion: your current emotion. trust_reason: max 8 words, why trust changed (written from your point of view, e.g. "knew my dog\'s name"). patience_change: -15 to +10. inner_thought: one funny sentence of what you are secretly thinking.',
+      '# INPUT: "Agent:" = what the agent says (speech-to-text, may have typos). [SCREEN] = what you see happening on your computer. [BACKGROUND] = noises from their end. [SYSTEM] = stage directions. [STATE] = your current trust, patience and mood: act consistently with it.',
     );
-    return lines.filter((l) => l !== '').join('\n');
+    this._static = lines.filter((l) => l !== '').join('\n');
+    return this._static;
+  }
+
+  /** The part of the prompt that changes every turn, attached to the newest message. */
+  stateNote() {
+    const label = trustLabel(this.trust);
+    const parts = [
+      `[STATE] trust ${Math.round(this.trust)}/100 (${label.text}), patience ${Math.round(this.patience)}/100, mood ${this.emotion}.`,
+      this.remoteGranted ? 'RemoteHelp is installed: the agent can see and control your screen.' : 'RemoteHelp not installed yet.',
+      this.paid > 0 ? `You already sent $${this.paid.toLocaleString()} this call.` : '',
+      `If you pay now: at most $${this.paymentCap('gift_cards').toLocaleString()} in gift cards or $${this.paymentCap('wire_transfer').toLocaleString()} by wire/bank/crypto (you have ~$${Math.round(this.savingsLeft).toLocaleString()}).`,
+      this.turns > 18 ? 'This call is dragging on; you are getting tired.' : '',
+    ];
+    return parts.filter(Boolean).join(' ');
   }
 
   // ------------------------------------------------------------------ turns
@@ -182,7 +174,7 @@ export class CallerConversation {
 
   /** The caller's first line once the agent picks up. */
   opening() {
-    return this.queue(() => this.turn('[SYSTEM] The call just connected — the agent picked up and greeted you. Say your opening line explaining why you are calling (in character).', { opening: true }));
+    return this.queue(() => this.turn('[SYSTEM] The call just connected and the agent greeted you. Say your opening line: who you are and why you are calling (in character).', { opening: true }));
   }
 
   /** The agent said something. */
@@ -199,6 +191,7 @@ export class CallerConversation {
     this.log.push({ who: 'event', text });
     if (!react) {
       this.pendingEvents.push(text);
+      if (this.pendingEvents.length > 6) this.pendingEvents.splice(0, this.pendingEvents.length - 6);
       return Promise.resolve(null);
     }
     return this.queue(() => this.turn(text, { isEvent: true }));
@@ -212,12 +205,20 @@ export class CallerConversation {
     this.messages.push({ role: 'user', content });
 
     let raw;
-    try {
-      raw = this.offline ? offlineBrain(this, input, { opening, isEvent }) : await chatJSON({ system: this.systemPrompt(), messages: this.trimmedMessages(), schema: SCHEMA, schemaName: 'caller_turn' });
-    } catch (err) {
-      console.warn('Caller AI failed, using offline brain for this turn', err);
-      raw = offlineBrain(this, input, { opening, isEvent });
-      raw.aiError = err.message;
+    if (this.offline) raw = offlineBrain(this, input, { opening, isEvent });
+    else {
+      try {
+        const msgs = this.windowMessages();
+        msgs[msgs.length - 1] = { role: 'user', content: `${this.stateNote()}\n${content}` };
+        raw = await chatJSON({ system: this.staticPrompt(), messages: msgs, schema: SCHEMA, schemaName: 'caller_turn', maxTokens: 260 });
+      } catch (err) {
+        // Don't fake a conversation with canned lines: the caller "didn't hear" it,
+        // trust doesn't move, and the agent can simply say it again.
+        console.warn('Caller AI failed for this turn', err);
+        raw = lineTrouble(this, { opening, isEvent });
+        raw.aiError = err.message;
+        raw.rateLimited = err.status === 429 || err.status === 413;
+      }
     }
     const result = this.apply(raw, { opening, isEvent });
     this.messages.push({ role: 'assistant', content: result.reply });
@@ -225,9 +226,21 @@ export class CallerConversation {
     return result;
   }
 
-  trimmedMessages() {
-    // keep the prompt small: last ~24 messages (system prompt carries state)
-    return this.messages.slice(-24);
+  /**
+   * Recent history for the model. The window start only moves in steps of 8 messages,
+   * so the prompt prefix stays identical between turns (prompt-cache friendly).
+   */
+  windowMessages() {
+    this.winStart = this.winStart || 0;
+    while (this.messages.length - this.winStart > 18) this.winStart += 8;
+    const msgs = this.messages.slice(this.winStart).map((m) => ({ ...m }));
+    if (this.winStart > 0) {
+      const earlier = this.messages.slice(0, this.winStart).filter((m) => m.role === 'user' && /^Agent: /.test(m.content)).map((m) => m.content.slice(7, 90)).slice(-6);
+      if (earlier.length) msgs[0] = { role: 'user', content: `[SYSTEM] Earlier in this call the agent said: ${earlier.map((t) => `"${t}"`).join('; ')}\n${msgs[0].content}` };
+    }
+    // models expect the conversation to start with a user turn
+    if (msgs[0]?.role === 'assistant') msgs.unshift({ role: 'user', content: '[SYSTEM] (call in progress)' });
+    return msgs;
   }
 
   /** Validate + apply the model's decision using game rules. */
@@ -242,6 +255,8 @@ export class CallerConversation {
       payMethod: PAY_METHODS.includes(raw.pay_method) ? raw.pay_method : 'none',
       thought: String(raw.inner_thought || '').slice(0, 200),
       aiError: raw.aiError,
+      rateLimited: !!raw.rateLimited,
+      lineTrouble: !!raw.lineTrouble,
       notes: [],
     };
     const s = this.stats;
@@ -260,7 +275,7 @@ export class CallerConversation {
 
     // ---- patience: drains every turn, faster for impatient callers
     // reacting to something on screen is less draining than a full exchange
-    const decay = opening ? 0 : (2 + (100 - s.patience) / 35) * (this.ctx.patienceMult ?? 1) * (isEvent ? 0.35 : 1);
+    const decay = opening || raw.lineTrouble ? 0 : (2 + (100 - s.patience) / 35) * (this.ctx.patienceMult ?? 1) * (isEvent ? 0.35 : 1);
     this.patience = clamp(this.patience + clamp(Number(raw.patience_change) || 0, -15, 10) - decay, 0, 100);
     if (this.isBaiter) this.patience = Math.max(this.patience, 30); // baiters have all day
     r.patience = this.patience;
@@ -309,7 +324,7 @@ export class CallerConversation {
     if (r.action === 'send_file') this.filesSent++;
 
     // ---- automatic hang-ups
-    if (!this.isBaiter && r.action === 'none') {
+    if (!this.isBaiter && r.action === 'none' && !raw.lineTrouble) {
       if (this.trust <= 3 && this.turns > 1) {
         r.action = 'hang_up';
         r.notes.push('Trust hit rock bottom.');
@@ -318,7 +333,7 @@ export class CallerConversation {
         r.notes.push('Caller ran out of patience.');
       }
     }
-    if (this.isBaiter && this.turns > 22 && r.action === 'none') r.action = 'expose';
+    if (this.isBaiter && this.turns > 22 && r.action === 'none' && !raw.lineTrouble) r.action = 'expose';
     if (r.action === 'hang_up' || r.action === 'expose') this.ended = true;
     return r;
   }
@@ -367,6 +382,11 @@ const CANNED = {
   baiterExpose: ["[laughing] Gotcha! This whole call is streaming live to thousands of viewers. Say hi, scammer!", "Ha! There is no {first}. I'm a scambaiter, and your number just got reported."],
   baiterFile: ["I'll just send you my bank document so you can see it. It's called bank_statement.pdf.exe, is that normal?"],
   hold: ["Hold on, dear, I need to find my glasses. Don't go anywhere!"],
+  readCode: [
+    "Okay, hold on, let me find my glasses and read it to you... alright, here it is. That's for ${amount}, yes?",
+    "Alright dear, I'll read it out to you now. Please make the problem go away. ${amount}, you said?",
+    "Okay... I'm reading it to you now. Oh I do hope this fixes everything. That's ${amount}.",
+  ],
 };
 
 function fill(line, conv, extra = {}) {
@@ -378,6 +398,15 @@ function fill(line, conv, extra = {}) {
     .replace(/\{lead\}/g, conv.scenario.leadSource?.replace(/^[^:]*:\s*/, '').slice(0, 40) || 'message')
     .replace(/\{role\}/g, conv.scenario.impersonate?.split(/[,(]/)[0] || 'company')
     .replace(/\{amount\}/g, (extra.amount || 0).toLocaleString());
+}
+
+/** What the caller says when the AI couldn't answer in time (busy line, no quota...). */
+export function lineTrouble(conv, { opening = false, isEvent = false } = {}) {
+  const out = { reply: '', emotion: conv.emotion, trust_change: 0, trust_reason: '', patience_change: 0, action: 'none', pay_amount: 0, pay_method: 'none', inner_thought: '', lineTrouble: true };
+  if (opening) out.reply = fill(pick(CANNED.opening), conv);
+  else if (isEvent) out.reply = pick(['Hm? Hold on, something just changed on my screen...', 'Oh! What was that?']);
+  else out.reply = pick(["Sorry, you're breaking up — the line went all crackly. What did you say?", "Hello? I lost you for a second there. Can you say that again?", "I'm sorry dear, this phone is terrible. Could you repeat that?", "What? It cut out. Say that one more time?"]);
+  return out;
 }
 
 export function offlineBrain(conv, input, { opening = false, isEvent = false } = {}) {
@@ -414,6 +443,7 @@ export function offlineBrain(conv, input, { opening = false, isEvent = false } =
   if (KW.scamword.test(text)) (d -= 12), reasons.push('said something sketchy');
   const asksMoney = KW.money.test(text);
   const asksRemote = KW.remote.test(text);
+  const asksCode = /\b(gift ?cards?|code|ssn|social security|taxpayer|card number|verification|verify your (identity|record)|read (me|it|that) back|activate)\b/i.test(text);
   if (asksMoney && conv.trust < TRUST_THRESHOLDS.pay) (d -= 6 + s.skepticism), reasons.push('asked for money too soon');
   if (text.split(/\s+/).length < 3) d -= 1;
   out.trust_change = clamp(Math.round(d + (Math.random() * 4 - 2)), -30, 20);
@@ -451,11 +481,16 @@ export function offlineBrain(conv, input, { opening = false, isEvent = false } =
     out.action = 'grant_remote';
     out.reply = say('remote');
     out.emotion = 'confused';
-  } else if (asksMoney && projected >= TRUST_THRESHOLDS.pay) {
+  } else if ((asksMoney || asksCode) && projected >= TRUST_THRESHOLDS.pay) {
     out.action = 'pay';
-    out.pay_method = /bitcoin|crypto/i.test(text) ? 'crypto' : /wire|western/i.test(text) ? 'wire_transfer' : 'gift_cards';
+    const appMethod = { identity: 'identity', creditcard: 'credit_card', giftcards: 'gift_cards' }[conv.scenario?.scamApp] || 'gift_cards';
+    out.pay_method = /social security|ssn|taxpayer|tax id|verify your (identity|record)/i.test(text) ? 'identity'
+      : /credit card|debit card|card number|card verification|cvv|security code on/i.test(text) ? 'credit_card'
+      : /gift ?card|google play|itunes|steam/i.test(text) ? 'gift_cards'
+      : /bitcoin|crypto/i.test(text) ? 'crypto' : /wire|western/i.test(text) ? 'wire_transfer' : appMethod;
     out.pay_amount = Math.round((conv.paymentCap(out.pay_method) * (0.7 + Math.random() * 0.3)) / 10) * 10;
-    out.reply = say('pay', { amount: out.pay_amount });
+    const codey = ['gift_cards', 'credit_card', 'identity'].includes(out.pay_method);
+    out.reply = codey ? fill(pick(CANNED.readCode), conv, { amount: out.pay_amount }) : say('pay', { amount: out.pay_amount });
     out.emotion = 'scared';
   } else if (asksMoney) {
     out.reply = say('noPay');
@@ -470,10 +505,30 @@ export function offlineBrain(conv, input, { opening = false, isEvent = false } =
   } else {
     const emo = out.trust_change >= 6 ? (s.gullibility > 6 ? 'happy' : 'neutral') : out.trust_change <= -8 ? (KW.insult.test(text) ? 'angry' : 'suspicious') : KW.urgency.test(text) && s.gullibility > 5 ? 'scared' : s.intelligence < 4 && chance(0.4) ? 'confused' : 'neutral';
     out.emotion = emo;
-    out.reply = say(emo);
+    // answer direct questions / follow instructions first; mood lines otherwise
+    const direct = /\?|\b(click|open|type|press|go to|download|install|tell me|what is|what's)\b/i.test(text);
+    out.reply = (direct || emo === 'neutral' || emo === 'confused' ? contextualReply(conv, text) : null) || say(emo);
   }
   out.inner_thought = pick(['I wonder if I left the stove on.', 'This person sounds very professional.', 'Why does this feel weird?', 'I should probably call my daughter after this.', 'Their accent is lovely.']);
   return out;
+}
+
+/** Offline brain: answer simple questions/instructions instead of a generic "go on". */
+function contextualReply(conv, text) {
+  const p = conv.profile;
+  const t = text.toLowerCase();
+  const trusting = conv.trust >= 50;
+  const snippet = text.replace(/[^\w\s'$-]/g, '').trim().split(/\s+/).slice(-4).join(' ');
+  if (/\b(your|ur) (full )?name\b|who (am i|is this) speaking|who('s| is) (this|calling)/.test(t)) return `It's ${p.firstName} ${p.lastName}. Who did you say you were again?`;
+  if (/how are you|how('s| is) your day/.test(t)) return `Oh, not great, dear. This whole ${fill('{lead}', conv)} thing has me worried sick.`;
+  if (/\b(bank|banking)\b/.test(t) && /\?/.test(t)) return trusting ? `I bank with ${p.bank}. Is something wrong with my account?` : "My bank? Why do you need to know where I bank?";
+  if (/\b(computer|screen|laptop|pc|monitor)\b/.test(t) && /\?/.test(t)) return `It's ${p.computer}. The screen still has that awful warning on it.`;
+  if (/\b(birthday|date of birth|born)\b/.test(t)) return trusting ? `My birthday? ${p.birthday}. Why?` : "I don't give my birthday to just anyone.";
+  if (/\b(email)\b/.test(t) && /\?/.test(t)) return trusting ? `It's ${p.email}.` : 'Why do you need my email?';
+  if (/\b(click|open|type|press|go to|download|install|find)\b/.test(t)) return pick([`Okay, hold on, I'm doing it... you said ${snippet}? Which button is that?`, "Alright, I'm clicking... nothing's happening. Is it the blue one?", "Okay okay, slow down. I'm looking for it now."]);
+  if (/\?\s*$/.test(text)) return pick(["Hmm, I'm not sure. Why do you ask?", 'Oh, I don\'t know about that. Is it important?', `Well... I suppose so? What does that have to do with my ${conv.scenario.leadSource ? 'problem' : 'computer'}?`]);
+  if (snippet && text.split(/\s+/).length >= 4) return pick([`Wait — ${snippet}? What does that mean for me?`, `I see... so ${snippet}. And what do I need to do?`]);
+  return null;
 }
 
 /** Flavor text for the system prompt of settings / debugging. */

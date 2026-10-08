@@ -1,12 +1,13 @@
 // RemoteHelp: connect to the caller's PC with the ID they read out, then poke around
 // their files, bank, email, command prompt... Everything you do on their screen is
 // described to the AI caller, who reacts to it.
-import { el, money, escapeHtml, pick } from '../../core/util.js';
+import { el, setText, money, escapeHtml, pick } from '../../core/util.js';
 import { bus } from '../../core/bus.js';
 import { sfx } from '../../core/audio.js';
 import { Desktop } from './os.js';
 import { parseFacts } from '../../game/victimPC.js';
 import { addIntel } from './apps.js';
+import { icon } from '../icons.js';
 
 export function remoteApp(game, win) {
   const body = el('div', { style: { height: '100%' } });
@@ -16,7 +17,7 @@ export function remoteApp(game, win) {
     const status = el('div', { style: { color: '#c62828', minHeight: '18px', fontWeight: 700 } }, msg);
     const connect = () => {
       const code = input.value.replace(/\D/g, '');
-      if (game.internetDown) return (status.textContent = '📡 No internet connection. Reboot the router!');
+      if (game.internetDown) return (setText(status, '📡 No internet connection. Reboot the router!'));
       if (!calls.active) return (status.textContent = 'No session request. You need a caller on the line first.');
       if (!calls.conv.remoteGranted) return (status.textContent = `Partner hasn't installed RemoteHelp. Convince ${calls.caller.firstName} to install it and read you their ID.`);
       if (code !== calls.caller.profile.remoteCode.replace(/\D/g, '')) {
@@ -42,23 +43,32 @@ export function remoteApp(game, win) {
   const renderSession = () => {
     const pc = calls.pc;
     const caller = calls.caller;
-    const blank = el('div', { style: { position: 'absolute', inset: '0', background: '#000', zIndex: 950, display: 'none', color: '#333', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--mono)', fontSize: '22px' } }, '(their screen is black — they can\'t see what you do)');
+    // Blanking only blacks out THEIR monitor. You keep seeing their desktop (with a
+    // badge), and while it's blank they can't see — or react to — what you do.
+    const badge = el('div.blank-badge', { style: { display: 'none' } }, icon('monitor-off'), el('span', 'Their screen is BLACK — they can\'t see what you do'));
     const desktop = victimDesktop(game, pc, caller);
-    desktop.root.append(blank);
-    let blanked = false;
+    desktop.root.append(badge);
+    let blanked = calls.screenBlanked = false;
+    const blankBtn = el('button.xp-btn', { onclick: () => {
+      blanked = !blanked;
+      badge.style.display = blanked ? '' : 'none';
+      desktop.root.classList.toggle('blanked', blanked);
+      setText(blankBtn, blanked ? 'Unblank their screen' : 'Blank their screen');
+      blankBtn.prepend(icon(blanked ? 'monitor' : 'monitor-off'));
+      // tell them it went dark BEFORE suppressing screen events
+      if (blanked) calls.screenEvent('made your computer screen go completely black so you can\'t see anything', { react: true });
+      calls.screenBlanked = blanked;
+      if (!blanked) calls.screenEvent('turned your screen back on');
+    } }, icon('monitor-off'), 'Blank their screen');
     body.replaceChildren(el('div.remote-view',
-      el('div.rbar', el('span', '🟢'), el('b', `${caller.name}'s PC`), el('span', { style: { color: '#999' } }, pc.vm ? '• VirtualBox Guest' : `• ${caller.profile.computer}`), el('span', { style: { flex: 1 } }),
-        el('button.xp-btn', { onclick: (e) => {
-          blanked = !blanked;
-          blank.style.display = blanked ? 'flex' : 'none';
-          e.target.textContent = blanked ? '🖥️ Unblank screen' : '🖤 Blank their screen';
-          calls.screenEvent(blanked ? 'made your computer screen go completely black so you can\'t see anything' : 'turned your screen back on', { react: blanked });
-        } }, '🖤 Blank their screen'),
+      el('div.rbar', el('span.live-dot'), el('b', `${caller.name}'s PC`), el('span', { style: { color: '#999' } }, pc.vm ? '• VirtualBox Guest' : `• ${caller.profile.computer}`), el('span', { style: { flex: 1 } }),
+        blankBtn,
         el('button.xp-btn.red', { onclick: () => {
+          calls.screenBlanked = false;
           calls.remoteConnected = false;
           calls.screenEvent('disconnected the remote session');
           renderConnect('Disconnected.');
-        } }, 'Disconnect')),
+        } }, icon('plug'), 'Disconnect')),
       desktop.root));
   };
 
@@ -103,7 +113,7 @@ function victimDesktop(game, pc, caller) {
     const w = desktop.open('mycomputer', { key: f.name, title: f.name, width: 520, height: 380 });
     if (!w) return;
     if (f.kind === 'image') {
-      w.setBody(el('div.photo', el('div', { style: { textAlign: 'center' } }, f.emoji, el('div', { style: { fontSize: '16px', marginTop: '6px' } }, f.caption, f.fact ? el('div', el('span.fact', { style: { background: '#fff3a1', cursor: 'pointer', fontSize: '13px', padding: '2px 6px' }, onclick: () => grab({ label: f.fact[0], value: f.fact[1] }) }, `📌 Save "${f.fact[1]}" as intel`)) : null))));
+      w.setBody(el('div.photo', el('div', { style: { textAlign: 'center' } }, f.emoji, el('div', { style: { fontSize: '16px', marginTop: '6px' } }, f.caption, f.fact ? el('div', el('span.fact', { style: { background: '#fff3a1', cursor: 'pointer', fontSize: '13px', padding: '2px 6px' }, onclick: () => grab({ label: f.fact[0], value: f.fact[1] }) }, `Copy "${f.fact[1]}"`)) : null))));
       ev(f.event || `opened your photo ${f.name}`, Math.random() < 0.5);
       return;
     }
@@ -120,16 +130,22 @@ function victimDesktop(game, pc, caller) {
     const view = el('div.fileview');
     for (const seg of parseFacts(f.content || '')) {
       if (seg.text) view.append(seg.text);
-      else view.append(el('span.fact', { title: 'Click to save as intel', onclick: () => grab(seg.fact) }, seg.fact.value));
+      else view.append(el('span.fact', { title: 'Click to copy', onclick: () => grab(seg.fact) }, seg.fact.value));
     }
     w.setBody(el('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
-      el('div.app-toolbar', el('span', { style: { fontSize: '12px', color: '#555', flex: 1 } }, '💡 Click highlighted details to save them as intel'), el('button.xp-btn', { onclick: () => { w.close(); f.deleted = true; ev(`deleted your file "${f.name}"`, true); } }, '🗑 Delete file')),
+      el('div.app-toolbar', el('span', { style: { fontSize: '12px', color: '#555', flex: 1 } }, 'Click any highlighted detail to copy it (and save it as intel)'), el('button.xp-btn', { onclick: () => { w.close(); f.deleted = true; ev(`deleted your file "${f.name}"`, true); } }, '🗑 Delete file')),
       el('div', { style: { flex: 1, overflow: 'auto' } }, view)));
     ev(f.event || `opened your file ${f.name}`, Math.random() < 0.45);
   }
 
+  // Clicking golden info copies it to the clipboard (paste it straight into a scam app or
+  // the call) and also files it under Intel.
   function grab(fact) {
-    if (addIntel(game, fact)) bus.emit('toast', { text: `🕵️ Intel saved: ${fact.label} — ${fact.value}`, ms: 2500 });
+    const value = String(fact.value);
+    try { navigator.clipboard?.writeText(value); } catch { /* clipboard blocked */ }
+    game.clipboard = value;
+    const saved = addIntel(game, fact);
+    bus.emit('toast', { icon: 'clip', title: 'Copied', text: `${fact.label}: ${value}${saved ? ' — saved to Intel' : ''}. Paste it with Ctrl+V.`, ms: 2600 });
   }
 
   function explorer(start) {
@@ -192,7 +208,7 @@ function victimDesktop(game, pc, caller) {
           s.contentEditable = inspect;
           s.classList.toggle('editable', inspect);
         }
-        inspectBtn.textContent = inspect ? '✅ Done editing' : '🛠 Inspect Element (F12)';
+        setText(inspectBtn, inspect ? '✅ Done editing' : '🛠 Inspect Element (F12)');
         if (inspect) bus.emit('toast', { text: '🛠 Inspect mode: click a balance, type a new number, press Enter. The caller sees the change.' });
         else ev('closed the weird code window on your bank page');
       } }, '🛠 Inspect Element (F12)');

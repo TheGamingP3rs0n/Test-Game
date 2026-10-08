@@ -8,10 +8,12 @@ import { baiterChanceFor, decideVerdict, upgradeLevel } from './progression.js';
 import { content, nextCaller, prepareCaller } from './content.js';
 import { CallManager } from './callManager.js';
 import { ChaosManager, bindChaosGame } from './chaos.js';
-import { sfx, startLoop, stopLoop, stopAllLoops } from '../core/audio.js';
-import { money, clamp, pick } from '../core/util.js';
+import { sfx, startLoop, stopLoop, stopAllLoops, pauseGameAudio, resumeGameAudio } from '../core/audio.js';
+import { music } from '../core/music.js';
+import { money, clamp, pick, clockText } from '../core/util.js';
 import { scriptedMessage } from '../ai/coworkers.js';
 import { speaker } from '../ai/speech.js';
+import { net } from '../net/net.js';
 
 export const DAY_START = 9 * 60;
 const DAY_END = 17 * 60;
@@ -25,6 +27,8 @@ export const game = {
   dayStart: DAY_START,
   dayEnd: DAY_END,
   paused: false,
+  mp: false, // co-op mode
+  mpTeam: { earned: 0, quota: 1500, day: 1 },
   computerOpen: false,
   micBroken: false,
   powerOut: false,
@@ -78,6 +82,7 @@ export const game = {
     this.dayEnd = DAY_END + 60 * upgradeLevel(this.run, 'chai');
     this.clock = this.dayStart;
     this.dayFlags = {};
+    this.overtimeLeft = null;
     this.resetHazards();
     world.setMode('menu');
     world.office.setShame((this.run.shame || []).slice(-5));
@@ -93,6 +98,7 @@ export const game = {
     this.chaos.planDay(this.day.day, this.dayStart, this.dayEnd);
     this.nextCallIn = 4;
     startLoop('officeAmbience', 'amb');
+    music.play('shift');
     this.ui.showHUD?.(true);
     this.chat('morning', 1);
     saveRun(this.run);
@@ -109,7 +115,8 @@ export const game = {
   },
 
   get minutesPerSecond() {
-    return (this.dayEnd - this.dayStart) / (Math.max(2, settings.dayLengthMinutes) * 60);
+    // fixed 15-minute shift (480 in-game minutes over 15 real minutes)
+    return (this.dayEnd - this.dayStart) / (15 * 60);
   },
 
   tick(dt) {
@@ -118,8 +125,9 @@ export const game = {
     if (this.phase === 'practice') return;
     this.clock += dt * this.minutesPerSecond;
     this.chaos.update(dt);
-    // schedule calls
-    if (this.calls.state === 'idle' && !this.powerOut) {
+    // schedule calls — but the phone stays quiet while you're in the break room / restroom
+    const onBreak = !!world.player?.zone;
+    if (this.calls.state === 'idle' && !this.powerOut && !onBreak) {
       this.nextCallIn -= dt;
       if (this.nextCallIn <= 0 && this.clock < this.dayEnd - 12) this.ringNext();
     }
@@ -130,16 +138,40 @@ export const game = {
       this.chat('idle', 0.7);
     }
     world.office.setClock(this.clock);
-    if (this.clock >= this.dayEnd) this.endDay();
+    if (this.clock >= this.dayEnd) {
+      if (this.mp) {
+        this.clock = this.dayStart + (this.clock - this.dayEnd); // co-op loops; ends by vote
+      } else if (this.overtimeLeft == null) {
+        this.startOvertime();
+      }
+    }
+    if (this.overtimeLeft != null) {
+      this.clock = this.dayEnd;
+      this.overtimeLeft -= dt;
+      bus.emit('overtime:tick', Math.max(0, this.overtimeLeft));
+      if (this.overtimeLeft <= 0) {
+        this.overtimeLeft = null;
+        this.endDay();
+      }
+    }
+  },
+
+  startOvertime() {
+    this.overtimeLeft = 120; // two real minutes of overtime
+    sfx('error');
+    bus.emit('toast', { kind: 'bad', icon: 'clock5', title: 'OVERTIME', text: 'The bell rang but you\'re not done. Two minutes of overtime — the boss is NOT happy.' });
+    bus.emit('overtime:start');
   },
 
   ringNext() {
     const caller = nextCaller({
       day: this.day.day,
       seen: new Set(this.day.seenCallers),
-      baiterChance: baiterChanceFor(this.day.day) * (upgradeLevel(this.run, 'leads') ? 0.7 : 1),
+      // a guaranteed-ish scambaiter: if none has called by the 4th call of the day, odds jump
+      baiterChance: (this.day.callsTaken >= 4 && !this.day.baiterSeen ? 0.5 : baiterChanceFor(this.day.day)) * (upgradeLevel(this.run, 'leads') ? 0.7 : 1),
       gullibleBias: upgradeLevel(this.run, 'leads') ? 2 : 0,
     });
+    if (caller.isScambaiter) this.day.baiterSeen = true;
     this.calls.ring(caller);
   },
 
@@ -161,9 +193,11 @@ export const game = {
     if (!allowNegative) this.day.earned = Math.max(0, this.day.earned);
     if (amount > 0) {
       sfx('cash');
-      bus.emit('toast', { kind: 'money', text: `💰 +${money(amount)}${label ? ` — ${label}` : ''}` });
+      if (this.mp && this.phase === 'playing') net.earn(amount);
+      bus.emit('money:popup', { amount });
+      bus.emit('toast', { kind: 'money', icon: 'money', text: `+${money(amount)}${label ? ` — ${label}` : ''}` });
     } else if (amount < 0) {
-      bus.emit('toast', { kind: 'bad', text: `💸 ${money(amount)}${label ? ` — ${label}` : ''}` });
+      bus.emit('toast', { kind: 'bad', icon: 'payout', text: `${money(amount)}${label ? ` — ${label}` : ''}` });
     }
     bus.emit('money:changed', this.day.earned);
   },
@@ -172,25 +206,20 @@ export const game = {
     return (this.day?.pendingPayments || []).filter((p) => p.status === 'pending' && !p.fake).reduce((s, p) => s + p.amount, 0);
   },
 
-  /** Cashier app: redeem a gift card or confirm a transfer. Returns 'ok' | 'invalid'. */
-  collect(pay, cardIndex = null) {
+  /** Normalize a typed code for comparison (ignore spaces, dashes, case). */
+  normCode(v) {
+    return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  },
+
+  /**
+   * A scam app verifies the code the caller read out. Returns:
+   *   'ok'       — code matched a real caller → money earned
+   *   'invalid'  — code matched, but the caller was a scambaiter (fake) → heat
+   *   'mismatch' — the typed code doesn't match what they read you
+   */
+  verifyScam(pay, entered) {
     if (pay.status !== 'pending') return pay.status;
-    if (pay.cards && cardIndex !== null) {
-      const card = pay.cards[cardIndex];
-      if (card.status !== 'pending') return card.status;
-      if (pay.fake) {
-        card.status = 'invalid';
-        sfx('error');
-      } else {
-        card.status = 'ok';
-        this.addMoney(card.value, `Gift card from ${pay.from}`);
-      }
-      if (pay.cards.every((c) => c.status !== 'pending')) {
-        pay.status = pay.fake ? 'invalid' : 'collected';
-        if (pay.fake) this.onFakePayment(pay);
-      }
-      return card.status;
-    }
+    if (this.normCode(entered) !== this.normCode(pay.code)) return 'mismatch';
     if (pay.fake) {
       pay.status = 'invalid';
       sfx('error');
@@ -198,14 +227,29 @@ export const game = {
       return 'invalid';
     }
     pay.status = 'collected';
-    this.addMoney(pay.amount, `${pay.method.replace(/_/g, ' ')} from ${pay.from}`);
+    const label = { giftcards: 'gift card', creditcard: 'card charge', identity: 'identity scam' }[pay.app] || 'payment';
+    this.addMoney(pay.amount, `${label} from ${pay.from}`);
+    return 'ok';
+  },
+
+  /** Direct collect (internal use; apps go through verifyScam). */
+  collect(pay) {
+    if (pay.status !== 'pending') return pay.status;
+    if (pay.fake) {
+      pay.status = 'invalid';
+      sfx('error');
+      this.onFakePayment(pay);
+      return 'invalid';
+    }
+    pay.status = 'collected';
+    this.addMoney(pay.amount, `${(pay.method || '').replace(/_/g, ' ')} from ${pay.from}`);
     return 'ok';
   },
 
   onFakePayment(pay) {
     this.run.heat = clamp(this.run.heat + (upgradeLevel(this.run, 'vpn') ? 3 : 6), 0, 100);
     this.addHighlight(`${pay.from} "paid" ${money(pay.amount)} in fake codes. Scambaiter!`);
-    bus.emit('toast', { kind: 'bad', text: `🚫 ${money(pay.amount)} from ${pay.from} was FAKE. That caller was a scambaiter. Heat +${upgradeLevel(this.run, 'vpn') ? 3 : 6}` });
+    bus.emit('toast', { kind: 'bad', icon: 'ban', text: `${money(pay.amount)} from ${pay.from} was FAKE. That caller was a scambaiter. Heat +${upgradeLevel(this.run, 'vpn') ? 3 : 6}` });
   },
 
   addHighlight(text, shame = false) {
@@ -220,6 +264,8 @@ export const game = {
   // ------------------------------------------------------------------ end of day
   endDay() {
     if (this.phase !== 'playing') return;
+    this.overtimeLeft = null;
+    bus.emit('overtime:end');
     this.phase = 'review';
     if (this.calls.state !== 'idle') this.calls.end('shift_over');
     this.chaos.reset();
@@ -227,13 +273,10 @@ export const game = {
     stopAllLoops();
     speaker.stop();
     this.closeComputer();
-    // the boss sweeps any real payments you forgot to collect
-    for (const p of this.day.pendingPayments) {
-      if (p.status === 'pending' && !p.fake) {
-        p.status = 'collected';
-        this.day.earned += p.amount;
-      }
-    }
+    // payments you never entered into a scam app are lost (you were too slow)
+    const missed = this.day.pendingPayments.filter((p) => p.status === 'pending' && !p.fake);
+    for (const p of missed) p.status = 'expired';
+    if (missed.length) this.addHighlight(`Left ${money(missed.reduce((s, p) => s + p.amount, 0))} uncollected — never entered the codes in time.`);
     const d = this.day;
     const verdict = decideVerdict({ earned: d.earned, quota: d.quota, strikes: this.run.strikes });
     const report = {
@@ -257,6 +300,7 @@ export const game = {
       rule: verdict,
     };
     sfx('sting');
+    music.play('review');
     this.ui.showHUD?.(false);
     // boss strides to the middle of his office
     const boss = world.office.boss;
@@ -287,6 +331,33 @@ export const game = {
     this.ui.showShop?.(this.run, commission);
   },
 
+  /** Player-initiated early end of day (the Clock Out button; only when quota is met). */
+  /** Take the stairs out: a proper clock-out if quota is met, otherwise walking out early. */
+  walkOut() {
+    if (this.phase !== 'playing' || !this.day) return;
+    const met = this.mp ? this.mpTeam.earned >= this.mpTeam.quota : this.day.earned >= this.day.quota;
+    if (met || this.mp) return this.clockOut();
+    if (this.calls.state === 'ringing') this.calls.decline();
+    sfx('lose');
+    this.addHighlight(`Walked out down the stairs at ${clockText(this.clock)} with the quota NOT met.`, true);
+    this.endDay();
+  },
+
+  clockOut() {
+    if (this.phase !== 'playing' || !this.day) return;
+    if (this.mp) {
+      if (this.mpTeam.earned < this.mpTeam.quota) return;
+      net.voteClockOut();
+      bus.emit('toast', { kind: 'info', icon: 'door', title: 'Clock-out vote', text: 'You voted to clock out. Waiting for the team…' });
+      return;
+    }
+    if (this.day.earned < this.day.quota) return;
+    if (this.calls.state === 'ringing') this.calls.decline();
+    sfx('win');
+    this.addHighlight('Clocked out early with quota in the bag.');
+    this.endDay();
+  },
+
   nextDay() {
     saveRun(this.run);
     this.beginDay();
@@ -301,6 +372,14 @@ export const game = {
   },
 
   quitToMenu() {
+    if (this.paused) {
+      this.paused = false;
+      document.body.classList.remove('paused');
+      resumeGameAudio();
+      speaker.resume();
+      music.setMuffled(false);
+      this.ui.hidePause?.();
+    }
     this.phase = 'menu';
     if (this.calls.state !== 'idle') this.calls.end('agent_hung_up');
     this.chaos.reset();
@@ -313,6 +392,44 @@ export const game = {
     this.ui.showHUD?.(false);
     world.setMode('menu');
     this.ui.showMenu?.();
+  },
+
+  // ------------------------------------------------------------------ co-op
+  /** Start (or advance to) a co-op shift with the team's shared quota. */
+  beginCoopDay(day, quota) {
+    this.mp = true;
+    if (!this.run) this.run = newRun();
+    this.run.day = day;
+    this.mpTeam = { earned: this.mpTeam?.earned || 0, quota, day };
+    this.phase = 'playing';
+    this.paused = false;
+    this.day = newDayState(this.run);
+    this.day.day = day;
+    this.day.quota = quota;
+    this.dayStart = DAY_START;
+    this.dayEnd = DAY_END;
+    this.clock = DAY_START;
+    this.dayFlags = {};
+    this.resetHazards();
+    this.ui.hidePause?.();
+    this.ui.hideScreens?.();
+    this.closeComputer();
+    world.office.setShame((this.run.shame || []).slice(-5));
+    world.player.sitAtDesk();
+    world.setMode('play');
+    world.player.requestLock();
+    this.chaos.planDay(this.day.day, this.dayStart, this.dayEnd);
+    this.nextCallIn = 4;
+    startLoop('officeAmbience', 'amb');
+    music.play('shift');
+    this.ui.showHUD?.(true);
+  },
+
+  leaveCoop() {
+    this.mp = false;
+    this.mpTeam = { earned: 0, quota: 1500, day: 1 };
+    net.disconnect();
+    this.quitToMenu();
   },
 
   // ------------------------------------------------------------------ practice
@@ -328,18 +445,35 @@ export const game = {
   },
 
   // ------------------------------------------------------------------ pause / computer
+  // Pausing freezes everything: the clock, the ringing phone (sound, shake and timer),
+  // caller voices, alarms and the 3D world. Resuming picks up exactly where it stopped.
   pause() {
     if (!this.playing || this.paused) return;
     this.paused = true;
+    this.modeBeforePause = world.mode;
     world.setMode('frozen');
+    pauseGameAudio();
+    speaker.pause();
+    music.setMuffled(true);
+    document.body.classList.add('paused');
+    sfx('pause');
     this.ui.showPause?.();
   },
 
   resume() {
     if (!this.paused) return;
     this.paused = false;
-    world.setMode(this.computerOpen ? 'computer' : 'play');
-    if (!this.computerOpen) world.player.requestLock();
+    document.body.classList.remove('paused');
+    resumeGameAudio();
+    speaker.resume();
+    music.setMuffled(false);
+    sfx('unpause');
+    this.ui.hidePause?.();
+    if (this.computerOpen) world.setMode('computer');
+    else {
+      world.setMode('play');
+      world.player.requestLock();
+    }
   },
 
   openComputer() {
@@ -363,30 +497,43 @@ export const game = {
   interact(id) {
     if (!this.playing) return;
     if (this.chaos.interact(id)) return;
-    const say = (t) => bus.emit('toast', { text: t });
+    const say = (t, icon) => bus.emit('toast', { text: t, icon });
     switch (id) {
       case 'computer':
         return this.openComputer();
       case 'phone':
         if (this.calls.state === 'ringing') return this.calls.answer();
-        return say(this.calls.active ? '📞 You\'re already on a call (talk with your headset).' : '📞 No calls right now. Enjoy the 4 seconds of peace.');
+        return say(this.calls.active ? 'You\'re already on a call (talk with your headset).' : 'No calls right now. Enjoy the 4 seconds of peace.', 'phone');
       case 'bossdoor':
         sfx('stamp');
-        return say(pick(['Mr. Chatterjee (through the door): "GO AWAY. QUOTA."', 'Mr. Chatterjee: "Unless you are bringing money or samosas, DO NOT KNOCK."']));
+        return say(pick(['Mr. Chatterjee (through the glass): "GO AWAY. QUOTA." (Walk in and press E on him if you dare.)', 'Mr. Chatterjee: "Unless you are bringing money or samosas, DO NOT KNOCK." (You could just walk in…)']));
+      case 'boss':
+        return this.ui.openBossTalk?.();
+      case 'exit':
+        return this.ui.leaveBuilding?.();
       case 'breaker':
-        return say('⚡ All breakers are on. The wiring is held together by hope and tape.');
+        return say('All breakers are on. The wiring is held together by hope and tape.', 'zap');
       case 'router':
-        return say('📶 The router blinks happily. For now.');
+        return say('The router blinks happily. For now.', 'wifi');
       case 'shredder':
         sfx('shred');
-        return say('🗑️ You shred Raju\'s lunch order. Worth it.');
+        return say('You shred Raju\'s lunch order. Worth it.', 'trash');
       case 'supplies':
-        return say('🎧 Spare headsets, chai packets, and 400 empty Google Play card sleeves.');
+        return say('Spare headsets, chai packets, and 400 empty Google Play card sleeves.', 'headphones');
       case 'extinguisher':
-        return say('🧯 A fire extinguisher. Expired in 2011, but optimistic.');
+        return say('A fire extinguisher. Expired in 2011, but optimistic.', 'extinguisher');
       case 'cow':
-        return say('🐄 Moo.');
+        return say('Moo.', 'cow');
       default:
+        if (id && id.startsWith('sit:')) {
+          const s = world.office.sitSpots[id];
+          if (s) {
+            world.player.sitAt(s.pos, s.yaw);
+            sfx('click');
+            bus.emit('toast', { kind: 'info', icon: 'chai', title: 'On a break', text: 'No calls will come while you sit here. Press WASD to get up.', ms: 3200 });
+          }
+          return undefined;
+        }
         return undefined;
     }
   },

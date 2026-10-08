@@ -1,14 +1,20 @@
 // App registry for your work PC + the "office" apps: Phone, Notes, Cashier, Playbook,
 // Messenger, Files, DefendoMax antivirus.
-import { el, money, clockText, uid, downloadBlob, dataURLToBlob } from '../../core/util.js';
+import { el, setText, money, clockText, uid, downloadBlob, dataURLToBlob } from '../../core/util.js';
 import { bus } from '../../core/bus.js';
 import { sfx } from '../../core/audio.js';
 import { content } from '../../game/content.js';
-import { COWORKERS, BOSS_CONTACT, coworkerReply } from '../../ai/coworkers.js';
 import { avatarDataUri } from '../portraits.js';
 import { remoteApp } from './remoteApp.js';
+import { messengerApp } from './messenger.js';
+export { bindChatStore } from './messenger.js';
 import { browserApp } from './browserApp.js';
-import { paintApp, cameraApp, recorderApp, docforgeApp, siteforgeApp } from './creativeApps.js';
+import { paintApp, docforgeApp, siteforgeApp } from './creativeApps.js';
+import { scamApp } from './scamApps.js';
+import { scamazonApp, meteorCookieApp, disscordApp } from './extraApps.js';
+import { rainbitApp } from './rainbit.js';
+import { pcSettingsApp, recycleBinApp } from './deskApps.js';
+import { phoneApp, recorderApp, antivirusApp } from './reskins.js';
 
 /** Persist a file in the run (paintings, photos, clips, documents). */
 export function saveFile(game, file) {
@@ -32,43 +38,32 @@ export function addIntel(game, fact) {
 export function buildApps(ctx) {
   const { game } = ctx;
   return {
-    phone: { name: 'Phone', icon: '📞', width: 420, height: 440, render: (win) => phoneApp(game, win) },
+    phone: { name: 'Phone', icon: '📞', width: 400, height: 560, render: (win) => phoneApp(game, win) },
     remote: { name: 'RemoteHelp', icon: '🖥️', width: 980, height: 620, render: (win) => remoteApp(game, win, ctx) },
     notes: { name: 'Notes', icon: '📝', width: 520, height: 460, render: () => notesApp(game) },
     browser: { name: 'Browser', icon: '🌐', width: 860, height: 560, render: (win, opts) => browserApp(game, win, opts) },
-    cashier: { name: 'Cashier', icon: '💰', width: 560, height: 480, render: (win) => cashierApp(game, win) },
+    cashier: { name: 'Cashier', icon: '💰', width: 520, height: 460, render: (win) => cashierApp(game, win) },
+    giftcards: { name: 'Gift Cards', icon: '🎁', width: 460, height: 520, render: (win) => scamApp(game, win, 'giftcards') },
+    creditcard: { name: 'Credit Card', icon: '💳', width: 460, height: 520, render: (win) => scamApp(game, win, 'creditcard') },
+    identity: { name: 'Identity', icon: '🆔', width: 460, height: 520, render: (win) => scamApp(game, win, 'identity') },
     playbook: { name: 'Playbook', icon: '📘', width: 560, height: 520, render: () => playbookApp(game) },
     messenger: { name: 'Messenger', icon: '💬', width: 620, height: 460, render: (win) => messengerApp(game, win) },
     files: { name: 'Files', icon: '📁', width: 640, height: 440, render: (win) => filesApp(game, win, ctx) },
-    antivirus: { name: 'DefendoMax', icon: '🛡️', width: 420, height: 300, render: (win) => antivirusApp(game, win) },
-    recorder: { name: 'Recorder', icon: '⏺️', width: 460, height: 340, render: (win) => recorderApp(game, win) },
+    antivirus: { name: 'DefendoMax', icon: '🛡️', width: 720, height: 460, render: (win) => antivirusApp(game, win) },
+    recorder: { name: 'Recorder', icon: '⏺️', width: 760, height: 520, render: (win) => recorderApp(game, win) },
     paint: { name: 'Paint', icon: '🎨', width: 760, height: 560, render: (win) => paintApp(game, win) },
-    camera: { name: 'Camera', icon: '📷', width: 560, height: 520, render: (win) => cameraApp(game, win), onClose: (win) => win.cleanup?.() },
     docforge: { name: 'DocForge', icon: '📄', width: 820, height: 600, render: (win) => docforgeApp(game, win) },
     siteforge: { name: 'SiteForge', icon: '🕸️', width: 820, height: 600, render: (win) => siteforgeApp(game, win) },
+    scamazon: { name: 'Scamazon', icon: '🛒', width: 680, height: 540, render: (win) => scamazonApp(game, win) },
+    meteorcookie: { name: 'Meteor Cookie', icon: '🍪', width: 420, height: 520, render: (win) => meteorCookieApp(game, win) },
+    disscord: { name: 'Disscord', icon: '💬', width: 560, height: 480, render: (win) => disscordApp(game, win) },
+    rainbit: { name: 'Rainbit', icon: '🎰', width: 820, height: 560, render: (win) => rainbitApp(game, win) },
+    settings: { name: 'Settings', icon: '⚙', width: 520, height: 520, render: (win) => pcSettingsApp(game, win) },
+    recycle: { name: 'Recycle Bin', icon: '🗑', width: 520, height: 400, render: (win) => recycleBinApp(game, win) },
   };
 }
 
 // ---------------------------------------------------------------------------
-function phoneApp(game, win) {
-  const body = el('div.pad');
-  const render = () => {
-    const c = game.calls;
-    body.replaceChildren(
-      el('h3', { style: { margin: '0 0 8px' } }, '📞 Line 1'),
-      c.state === 'ringing' ? el('div', el('p', `Incoming: ${c.caller.name}`), el('button.xp-btn.primary', { onclick: () => c.answer() }, 'Answer')) :
-      c.active ? el('div', el('p', `On call with ${c.caller.name} — ${Math.floor(c.callTime)}s`), el('button.xp-btn.red', { onclick: () => c.end('agent_hung_up') }, 'Hang up')) :
-      el('p', { style: { color: '#666' } }, 'No active call. Calls arrive automatically.'),
-      el('h3', { style: { margin: '14px 0 6px' } }, "Today's call log"),
-      el('div.list', (game.day?.callLog || []).slice().reverse().map((l) => el('div.li', el('span', l.paid ? '💰' : l.outcome === 'exposed' ? '🔴' : l.outcome === 'flagged' ? '🚩' : '📵'), el('span', { style: { flex: 1 } }, `${l.name} — ${l.scenario}`), el('b', l.paid ? money(l.paid) : l.outcome.replace(/_/g, ' '))))),
-    );
-  };
-  render();
-  const offs = ['call:ring', 'call:start', 'call:end'].map((e) => bus.on(e, render));
-  win.onClose = () => offs.forEach((o) => o());
-  return body;
-}
-
 function notesApp(game) {
   const ta = el('textarea.notes-area', { value: game.run.notes || '', oninput: () => (game.run.notes = ta.value), spellcheck: false });
   const intel = el('div.list.intel-list');
@@ -86,46 +81,29 @@ function notesApp(game) {
 
 function cashierApp(game, win) {
   const body = el('div.cashier');
+  const APP = { giftcards: 'Gift Cards', creditcard: 'Credit Card', identity: 'Identity' };
   const render = () => {
-    const pays = game.day?.pendingPayments || [];
-    const pending = game.pendingTotal();
+    const pays = (game.day?.pendingPayments || []).slice().reverse();
+    const pending = pays.filter((p) => p.status === 'pending' && !p.fake);
     body.replaceChildren(
-      el('div.app-toolbar', el('div', el('div', { style: { fontSize: '12px', color: '#555' } }, 'Collected today'), el('div.stat', money(game.day?.earned || 0))), el('div', { style: { marginLeft: '20px' } }, el('div', { style: { fontSize: '12px', color: '#555' } }, 'Waiting to collect'), el('div.stat', { style: { color: '#c77700' } }, money(pending)))),
-      pays.length ? null : el('div', { style: { padding: '20px', color: '#777' } }, 'No payments yet. Get a caller to pay with gift cards, a wire, crypto, or a bank transfer.'),
-      ...pays.slice().reverse().map((p) => payRow(game, p, render)),
+      el('div.app-toolbar',
+        el('div', el('div', { style: { fontSize: '12px', color: '#555' } }, 'Collected today'), el('div.stat', money(game.day?.earned || 0))),
+        el('div', { style: { marginLeft: '20px' } }, el('div', { style: { fontSize: '12px', color: '#555' } }, 'Waiting to collect'), el('div.stat', { style: { color: '#c77700' } }, money(game.pendingTotal())))),
+      pending.length ? el('div', { style: { padding: '8px 12px', fontSize: '12px', color: '#555' } }, 'Enter each caller\'s code in the app shown to collect it.') : null,
+      pays.length ? null : el('div', { style: { padding: '20px', color: '#777' } }, 'No payments yet. Build a caller\'s trust, then get them to read you a gift card code, card verification code, or ID number.'),
+      ...pays.map((p) => el('div.pay',
+        el('div.amt', money(p.amount)),
+        el('div', { style: { flex: 1 } }, el('b', `${APP[p.app] || p.app} — ${p.from}`), el('div', { style: { fontSize: '12px', color: '#666' } }, `at ${clockText(p.time || 540)}`)),
+        p.status === 'collected' ? el('b', { style: { color: '#137a43' } }, '✔ collected')
+          : p.status === 'invalid' ? el('b', { style: { color: '#c62828' } }, '✖ INVALID')
+          : p.status === 'expired' ? el('b', { style: { color: '#999' } }, 'expired')
+          : el('button.xp-btn.primary', { onclick: () => win.desktop.open(p.app) }, `Open ${APP[p.app] || p.app}`))),
     );
   };
   render();
-  const offs = ['call:payment', 'money:changed'].map((e) => bus.on(e, render));
+  const offs = ['call:payment', 'money:changed', 'call:end'].map((e) => bus.on(e, () => body.isConnected && render()));
   win.onClose = () => offs.forEach((o) => o());
   return body;
-}
-
-function payRow(game, p, rerender) {
-  const label = { gift_cards: '🎁 Gift cards', wire_transfer: '🏦 Wire transfer', crypto: '🪙 Crypto', bank_transfer: '🏦 Bank transfer', cash_by_mail: '✉️ Cash by mail' }[p.method] || p.method;
-  const status = (s) => (s === 'ok' || s === 'collected' ? el('b', { style: { color: '#137a43' } }, '✔ collected') : s === 'invalid' ? el('b', { style: { color: '#c62828' } }, '✖ INVALID') : null);
-  if (p.cards) {
-    return el('div', { style: { borderBottom: '2px solid #ddd' } },
-      el('div.pay', el('div.amt', money(p.amount)), el('div', { style: { flex: 1 } }, el('b', label), el('div', { style: { fontSize: '12px', color: '#666' } }, `from ${p.from} at ${clockText(p.time || 540)}`))),
-      ...p.cards.map((c, i) => el('div.pay', { style: { paddingLeft: '30px' } }, el('span.code', c.code), el('span', money(c.value)), el('span.spacer', { style: { flex: 1 } }),
-        status(c.status) || el('button.xp-btn.primary', { onclick: (e) => {
-          e.target.disabled = true;
-          e.target.textContent = 'Checking…';
-          setTimeout(() => {
-            game.collect(p, i);
-            rerender();
-          }, 700);
-        } }, 'Redeem'))));
-  }
-  return el('div.pay', el('div.amt', money(p.amount)), el('div', { style: { flex: 1 } }, el('b', label), el('div', { style: { fontSize: '12px', color: '#666' } }, `from ${p.from}`)),
-    status(p.status) || el('button.xp-btn.primary', { onclick: (e) => {
-      e.target.disabled = true;
-      e.target.textContent = 'Processing…';
-      setTimeout(() => {
-        game.collect(p);
-        rerender();
-      }, 1800);
-    } }, 'Confirm transfer'));
 }
 
 function playbookApp(game) {
@@ -138,58 +116,10 @@ function playbookApp(game) {
       el('div', { style: { fontSize: '12px', color: '#555' } }, `Pretend to be: ${s.impersonate}. Lead: ${s.leadSource}`),
       s.unlockDay <= day ? el('ol', s.playbook.map((step) => el('li', step))) : null)),
     el('h4', '🚩 Spotting scambaiters'),
-    el('ul', ['Too eager to buy gift cards, or happy to read codes before you even ask', 'Their PC says "VirtualBox", has OBS recording, or files about scammers', 'Gift card codes that come back INVALID in the Cashier', 'They send you files ending in .exe — never open those', 'Ask them something only a real old person would know... or just flag them (🚩) for a bounty'].map((t) => el('li', t))),
-    el('h4', '💡 Trust tips'),
-    el('ul', ['Use details from their PC (pet names, bank, family) — it makes you sound legit', 'Don\'t ask for money in your first few lines', 'Stay consistent: callers remember what you said', 'Office chaos is audible on the call. Callers notice cows.'].map((t) => el('li', t))),
+    el('ul', ['Too eager to buy gift cards, or happy to read codes before you even ask', 'Their PC says "VirtualBox", has OBS recording, or files about scammers', 'Gift card codes that come back INVALID when you Verify them', 'They send you files ending in .exe — never open those', 'Ask them something only a real old person would know... or just flag them (🚩) for a bounty'].map((t) => el('li', t))),
+    el('h4', '💡 How to get paid'),
+    el('ul', ['Build trust first, THEN ask them to read you a gift card code, card verification code, or ID number', 'Their code appears in the Phone transcript — type it into the matching app (Gift Cards / Credit Card / Identity) and hit Verify', 'Enter codes before 5 PM — uncollected codes are lost at the end of the shift', 'Use details from their PC (pet names, bank, family) to push trust higher and unlock bigger payouts', 'Scambaiters read FAKE codes that come back INVALID and raise police heat — check suspicious ones in GiftCheck first'].map((t) => el('li', t))),
   );
-}
-
-function messengerApp(game, win) {
-  const contacts = [...COWORKERS, BOSS_CONTACT];
-  game.run.chats = game.run.chats || {};
-  let current = contacts[0].id;
-  const unread = {};
-  const list = el('div.contacts');
-  const msgs = el('div.msgs');
-  const input = el('input', { placeholder: 'Message…', onkeydown: (e) => (e.stopPropagation(), e.key === 'Enter' && send()) });
-  const renderContacts = () => list.replaceChildren(...contacts.map((c) => el(`div.contact${c.id === current ? '.on' : ''}`, { onclick: () => ((current = c.id), (unread[c.id] = 0), renderAll()) }, el('img', { src: avatarDataUri(c.avatar, 'happy') }), el('div', el('b', c.name), el('div', { style: { fontSize: '11px', color: '#777' } }, `"${c.alias}"`)), unread[c.id] ? el('span.unread', unread[c.id]) : null)));
-  const renderMsgs = () => {
-    const thread = game.run.chats[current] || [];
-    msgs.replaceChildren(...thread.map((m) => el(`div.bub${m.from === 'me' ? '.me' : ''}`, m.text)));
-    msgs.scrollTop = msgs.scrollHeight;
-  };
-  const renderAll = () => (renderContacts(), renderMsgs());
-  const send = async () => {
-    const text = input.value.trim();
-    if (!text) return;
-    input.value = '';
-    const id = current;
-    (game.run.chats[id] = game.run.chats[id] || []).push({ from: 'me', text });
-    renderMsgs();
-    const contact = contacts.find((c) => c.id === id);
-    const reply = await coworkerReply(contact, game.run.chats[id], text);
-    game.run.chats[id].push({ from: id, text: reply });
-    if (current === id) renderMsgs();
-    else (unread[id] = (unread[id] || 0) + 1), renderContacts();
-    sfx('notify');
-  };
-  const off = bus.on('chat:message', (m) => {
-    if (current !== m.from) unread[m.from] = (unread[m.from] || 0) + 1;
-    renderAll();
-  });
-  win.onClose = off;
-  renderAll();
-  return el('div.chat', list, el('div.thread', msgs, el('div.compose', input, el('button.xp-btn.primary', { onclick: send }, 'Send'))));
-}
-
-/** Coworker messages are stored even when Messenger is closed. */
-export function bindChatStore(game) {
-  bus.on('chat:message', (m) => {
-    if (!game.run) return;
-    game.run.chats = game.run.chats || {};
-    const t = (game.run.chats[m.from] = game.run.chats[m.from] || []);
-    if (t[t.length - 1]?.text !== m.text) t.push({ from: m.from, text: m.text });
-  });
 }
 
 function filesApp(game, win) {
@@ -222,28 +152,3 @@ function filesApp(game, win) {
   return el('div.split', side, main);
 }
 
-function antivirusApp(game, win) {
-  const bar = el('div');
-  const status = el('div', game.virus ? '⚠️ THREATS DETECTED. Your PC is infected!' : '✅ Your PC is protected (probably).');
-  const btn = el('button.xp-btn.primary', { onclick: () => scan() }, '🔍 Scan now');
-  const scan = () => {
-    btn.disabled = true;
-    let p = 0;
-    status.textContent = 'Scanning… (please do not panic)';
-    const t = setInterval(() => {
-      p += 4 + Math.random() * 6;
-      bar.style.width = `${Math.min(100, p)}%`;
-      if (p >= 100) {
-        clearInterval(t);
-        btn.disabled = false;
-        if (game.virus) {
-          status.textContent = `☣️ Removed ${Math.floor(Math.random() * 3000) + 300} threats, including "BonziBuddy" and "grandma_gets_even.dll".`;
-          sfx('win');
-          if (game.chaos.active?.def.type === 'virus') game.chaos.finish(true);
-          else game.virus = false;
-        } else status.textContent = 'No threats found. DefendoMax would like a 5-star review.';
-      }
-    }, 200);
-  };
-  return el('div.av-scan', el('h3', { style: { margin: '0 0 6px' } }, '🛡️ DefendoMax Antivirus 2009'), status, el('div.bar', bar), btn);
-}

@@ -1,6 +1,6 @@
 // The call panel: caller ID, live portrait (changes with emotion), the Trust Meter,
 // patience, transcript, push-to-talk, typed replies, intel chips and call actions.
-import { el, typingInField, escapeHtml } from '../core/util.js';
+import { el, setText, typingInField, escapeHtml, renderText, renderHTML } from '../core/util.js';
 import { bus } from '../core/bus.js';
 import { settings } from '../core/store.js';
 import { voiceInput, speaker } from '../ai/speech.js';
@@ -8,8 +8,11 @@ import { trustLabel } from '../ai/callerBrain.js';
 import { portraitFor } from './portraits.js';
 import { sfx, unlockAudio } from '../core/audio.js';
 import { confirmDialog } from './dialog.js';
+import { icon, iconFor, stripEmoji } from './icons.js';
 
-const EMO_ICON = { neutral: '😐', happy: '😊', excited: '🤩', confused: '😕', suspicious: '🤨', angry: '😡', scared: '😱', sad: '😢' };
+const EMO_ICON = { neutral: 'meh', happy: 'smile', excited: 'sparkles', confused: 'help', suspicious: 'annoyed', angry: 'angry', scared: 'ghost', sad: 'frown' };
+const EMO_LABEL = { neutral: 'Calm', happy: 'Happy', excited: 'Excited', confused: 'Confused', suspicious: 'Suspicious', angry: 'Angry', scared: 'Scared', sad: 'Sad' };
+const LINE_ICON = { system: 'info', event: 'eye' };
 
 export class CallPanel {
   constructor(root, game) {
@@ -42,7 +45,8 @@ export class CallPanel {
       if (typingInField() || e.repeat) return;
       if (e.code === (settings.pttKey || 'KeyV') && this.calls.active) {
         e.preventDefault();
-        this.startTalk();
+        if (settings.pttToggle && this.talking) this.stopTalk();
+        else this.startTalk();
       }
       if (e.code === 'KeyF' && this.calls.state === 'ringing' && this.game.playing && !this.game.paused) this.calls.answer();
       if (e.code === 'Enter' && this.calls.active && this.input && document.activeElement !== this.input) {
@@ -52,7 +56,7 @@ export class CallPanel {
       }
     });
     document.addEventListener('keyup', (e) => {
-      if (e.code === (settings.pttKey || 'KeyV') && this.talking) this.stopTalk();
+      if (e.code === (settings.pttKey || 'KeyV') && this.talking && !settings.pttToggle) this.stopTalk();
     });
     setInterval(() => this.tick(), 80);
   }
@@ -60,55 +64,61 @@ export class CallPanel {
   hide() {
     if (this.talking) this.stopTalk(true);
     this.node.style.display = 'none';
+    this.node.className = 'callpanel';
     this.node.replaceChildren();
     this.input = null;
-    document.body.classList.remove('oncall');
+    this.needle = null;
+    document.body.classList.remove('oncall', 'ringing');
     bus.emit('callpanel:visible', false);
   }
 
-  show() {
+  show(mode) {
     this.node.style.display = '';
-    document.body.classList.add('oncall');
+    this.node.className = `callpanel ${mode}`;
+    document.body.classList.toggle('oncall', mode === 'active');
+    document.body.classList.toggle('ringing', mode === 'ringing');
     bus.emit('callpanel:visible', true);
   }
 
+  /** Incoming call: a compact card, not the full panel. */
   renderRinging(caller) {
-    this.show();
-    this.node.classList.add('ringing');
-    this.ringCountdown = el('span.muted');
+    this.show('ringing');
+    this.ringCountdown = el('div.ring-timer');
+    this.ringArc = el('div.ring-arc');
     this.node.replaceChildren(
-      el('div.call-head',
-        el('div.portrait', el('img', { src: portraitFor(caller, 'neutral'), alt: '' })),
-        el('div.call-id', el('div.meta', '📞 INCOMING CALL'), el('div.name', caller.name), el('div.meta', `${caller.location || ''}`), el('div.lead', '🎯 Lead: ', caller.scenario.leadSource))),
-      el('div.ringing-box',
-        el('div.muted', { style: { fontSize: '13px' } }, `Suggested scam: ${caller.scenario.icon || ''} ${caller.scenario.name} — pretend to be ${caller.scenario.impersonate}.`),
-        el('button.btn.green.big', { onclick: () => (unlockAudio(), this.calls.answer()) }, '📞 Answer ', el('span.kbd', 'F')),
-        el('button.btn.ghost', { onclick: () => this.calls.decline() }, 'Ignore (the boss will notice)'),
-        this.ringCountdown),
+      el('div.ring-top', el('span.ring-pulse', icon('phone-in')), el('span', 'Incoming call'), this.ringCountdown),
+      el('div.ring-portrait', this.ringArc, el('img', { src: portraitFor(caller, 'neutral'), alt: '' })),
+      el('div.ring-name', caller.name),
+      el('div.ring-meta', caller.location || ''),
+      el('div.ring-lead', icon(iconFor(caller.scenario.icon, 'target')), el('span', stripEmoji(caller.scenario.name))),
+      el('div.ring-actions',
+        el('button.btn.green', { onclick: () => (unlockAudio(), this.calls.answer()) }, icon('phone'), 'Answer', el('span.kbd', 'F')),
+        el('button.btn.ghost.icon-only', { title: 'Ignore (the boss will notice)', onclick: () => this.calls.decline() }, icon('phone-off'))),
     );
   }
 
   renderActive(caller, conv) {
-    this.node.classList.remove('ringing');
-    this.show();
+    this.show('active');
     this.caller = caller;
     this.portraitImg = el('img', { src: portraitFor(caller, 'neutral'), alt: '' });
-    this.emo = el('span.emo', EMO_ICON.neutral);
+    this.emo = el('span.emo', icon(EMO_ICON.neutral));
+    this.emoLabel = el('span.emo-label', EMO_LABEL.neutral);
     this.portrait = el('div.portrait', this.portraitImg, this.emo);
     this.timer = el('div.call-timer', '00:00');
-    this.holdBadge = el('div.badge.yellow', { style: { display: 'none', position: 'absolute', left: '14px', bottom: '6px' } }, '⏸ ON HOLD');
+    this.holdBadge = el('div.hold-badge', { style: { display: 'none' } }, icon('pause'), 'ON HOLD');
     this.needle = el('div.needle');
     this.cover = el('div.cover');
     this.trustVal = el('div.val', '');
     this.trustState = el('div.state', '');
     this.reason = el('div.reason', '');
     this.meter = el('div.meter', this.cover, this.needle, this.trustVal);
-    this.trustBox = el('div.trust', { style: { position: 'relative' } },
-      el('div.top', el('div.title', 'Caller trust'), this.trustState),
+    this.shownTrust = conv.trust;
+    this.trustBox = el('div.trust',
+      el('div.top', el('div.title', 'Trust'), this.trustState),
       this.meter,
-      el('div.ticks', el('span', 'Hang up'), el('span', 'Suspicious'), el('span', 'Uncertain'), el('span', 'Cooperative')),
+      el('div.ticks', el('span', 'Hang up'), el('span', 'Suspicious'), el('span', 'Unsure'), el('span', 'Cooperative')),
       this.reason,
-      el('div.patience', '⏳ Patience', el('div.bar', (this.patienceBar = el('div'))), (this.patienceVal = el('span', ''))));
+      el('div.patience', icon('hourglass'), el('span', 'Patience'), el('div.bar', (this.patienceBar = el('div'))), (this.patienceVal = el('span', ''))));
     this.transcript = el('div.transcript');
     this.thinking = el('div.thinking', { style: { display: 'none' } }, `${caller.firstName} is thinking`);
     this.intel = el('div.intel-chips');
@@ -116,7 +126,7 @@ export class CallPanel {
     this.pttLabel = el('span', 'Hold to talk');
     const key = (settings.pttKey || 'KeyV').replace('Key', '');
     this.ptt = el('button.ptt', { onmousedown: (e) => (e.preventDefault(), this.startTalk()), onmouseup: () => this.stopTalk(), onmouseleave: () => this.talking && this.stopTalk(), ontouchstart: (e) => (e.preventDefault(), this.startTalk()), ontouchend: () => this.stopTalk() },
-      el('div', '🎙️ ', this.pttLabel), el('small', `or hold ${key}`), this.pttLvl);
+      icon('mic'), el('div.ptt-text', this.pttLabel, el('small', `or hold ${key}`)), this.pttLvl);
     this.input = el('input', { placeholder: 'Type what you say… (Enter)', onkeydown: (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -133,22 +143,23 @@ export class CallPanel {
     } });
     this.node.replaceChildren(
       el('div.call-head', this.portrait,
-        el('div.call-id', el('div.name', caller.name), el('div.meta', `${caller.age ? caller.age + ' • ' : ''}${caller.occupation || ''}`), el('div.meta', caller.location || ''), el('div.lead', `${caller.scenario.icon || '🎯'} ${caller.scenario.name}: be "${caller.scenario.impersonate}"`)),
-        this.timer, this.holdBadge),
+        el('div.call-id', el('div.name', caller.name), el('div.meta', [caller.age, caller.occupation].filter(Boolean).join(' • ')), el('div.meta', caller.location || ''), el('div.mood', this.emoLabel)),
+        el('div.call-right', this.timer, this.holdBadge)),
+      el('div.call-scam', icon(iconFor(caller.scenario.icon, 'target')), el('span', 'Be: ', el('b', stripEmoji(caller.scenario.impersonate)))),
       this.trustBox,
       this.transcript,
       this.intel,
       el('div.call-controls',
-        this.ptt,
-        el('div.say-row', this.input, el('button.btn.small', { onclick: () => this.sendTyped() }, 'Say')),
+        el('div.say-row', this.ptt, this.input),
         el('div.call-actions',
-          el('button.btn.danger', { onclick: () => this.calls.end('agent_hung_up') }, '📵 Hang up'),
+          el('button.btn.danger', { onclick: () => this.calls.end('agent_hung_up') }, icon('phone-off'), 'Hang up'),
           el('button.btn', { title: 'Accuse them of being a scambaiter. Right = bonus, wrong = lost victim.', onclick: async () => {
-            if (await confirmDialog('Flag as scambaiter?', `If ${caller.firstName} is a scambaiter you get a bounty. If not, they hang up offended.`, { ok: '🚩 Flag them', danger: true })) this.calls.flagBaiter();
-          } }, '🚩 Scambaiter!'),
-          el('button.btn', { title: 'Open your computer', onclick: () => (this.game.computerOpen ? this.game.closeComputer() : this.game.openComputer()) }, '🖥️ PC'))),
+            if (await confirmDialog('Flag as scambaiter?', `If ${caller.firstName} is a scambaiter you get a bounty. If not, they hang up offended.`, { ok: 'Flag them', danger: true })) this.calls.flagBaiter();
+          } }, icon('flag'), 'Baiter?'),
+          el('button.btn', { title: 'Open your computer (Tab)', onclick: () => (this.game.computerOpen ? this.game.closeComputer() : this.game.openComputer()) }, icon('monitor'), 'PC'))),
     );
     this.renderIntel();
+    this.updateTrust({ trust: conv.trust, delta: 0, reason: '', patience: conv.patience, emotion: 'neutral' });
     if (voiceInput.mode === 'text') this.ptt.disabled = true;
   }
 
@@ -188,7 +199,7 @@ export class CallPanel {
       this.talking = false;
       this.ptt.classList.remove('active');
       this.pttLabel.textContent = 'Hold to talk';
-      bus.emit('toast', { kind: 'warn', text: `Microphone unavailable: ${err.message}. You can type instead.` });
+      bus.emit('toast', { kind: 'warn', icon: 'mic-off', title: 'Microphone unavailable', text: `${err.message}. You can type instead.` });
     }
   }
 
@@ -197,24 +208,28 @@ export class CallPanel {
     this.talking = false;
     this.ptt?.classList.remove('active');
     if (this.pttLabel) this.pttLabel.textContent = 'Transcribing…';
-    const ctx = this.caller ? `Phone call with ${this.caller.name}. Scam call center agent speaking. Words: gift card, remote access, RemoteHelp, Windoze, refund, warrant, bitcoin, ${this.caller.firstName}.` : '';
+    // Whisper follows the style of a natural sentence far better than a keyword list
+    const ctx = this.caller ? `Hello ${this.caller.firstName}, this is ${settings.agentAlias || 'Steve'} from ${this.caller.scenario.impersonate?.split(/[,(]/)[0] || 'support'}. Please open RemoteHelp so I can fix your Windoze computer.` : '';
     try {
       const text = await voiceInput.end(ctx);
       if (this.pttLabel) this.pttLabel.textContent = 'Hold to talk';
       if (silent) return;
       if (text) this.calls.playerSay(text);
-      else bus.emit('toast', { kind: 'warn', text: '🎙️ Didn\'t catch that — hold the key while you speak.', ms: 2200 });
+      else bus.emit('toast', { kind: 'warn', icon: 'mic-off', title: 'Didn\'t catch that', text: 'Hold the key the whole time you speak — wait for the click before talking.', ms: 2600 });
     } catch (err) {
       if (this.pttLabel) this.pttLabel.textContent = 'Hold to talk';
-      bus.emit('toast', { kind: 'bad', text: `Speech-to-text failed: ${err.message}` });
+      bus.emit('toast', { kind: 'bad', icon: 'mic-off', title: 'Speech-to-text failed', text: err.status === 429 ? 'Groq\'s free speech limit is busy for a moment. Try again or type.' : err.message });
     }
   }
 
   addLine(l) {
     if (!this.transcript) return;
     const m = el(`div.msg.${l.who}`);
-    if (l.html) m.innerHTML = l.html;
-    else m.textContent = l.text;
+    if (LINE_ICON[l.who] || l.icon) m.append(icon(l.icon || LINE_ICON[l.who]));
+    const body = el('span');
+    if (l.html) body.innerHTML = renderHTML(l.html);
+    else body.append(...renderText(l.text));
+    m.append(body);
     if (l.code && l.who === 'caller' && !l.text.includes(l.code.split(' ')[0])) {
       m.append(el('div', { html: `<span class="code">${escapeHtml(l.code)}</span>` }));
     }
@@ -234,14 +249,17 @@ export class CallPanel {
     const lab = trustLabel(trust);
     this.needle.style.left = `${trust}%`;
     this.cover.style.width = `${100 - trust}%`;
-    this.trustVal.textContent = `${Math.round(trust)}`;
     this.trustState.textContent = lab.text;
     this.trustState.style.color = { high: 'var(--green-2)', mid: 'var(--yellow)', low: 'var(--orange)', critical: 'var(--red)' }[lab.key];
-    if (reason) this.reason.textContent = `“${reason}”`;
+    this.targetTrust = trust;
+    if (reason) setText(this.reason, `“${reason}”`);
     if (delta) {
       const d = el(`div.delta.${delta > 0 ? 'up' : 'down'}`, `${delta > 0 ? '+' : ''}${delta}`);
       this.trustBox.append(d);
       setTimeout(() => d.remove(), 1700);
+      this.meter.classList.remove('pulse-up', 'pulse-down');
+      void this.meter.offsetWidth;
+      this.meter.classList.add(delta > 0 ? 'pulse-up' : 'pulse-down');
       if (delta <= -8) {
         this.trustBox.classList.remove('shake');
         void this.trustBox.offsetWidth;
@@ -249,15 +267,27 @@ export class CallPanel {
       }
     }
     this.patienceBar.style.width = `${patience}%`;
+    this.patienceBar.classList.toggle('low', patience < 25);
     this.patienceVal.textContent = `${Math.round(patience)}`;
     if (emotion && this.caller) {
       this.portraitImg.src = portraitFor(this.caller, emotion);
-      this.emo.textContent = EMO_ICON[emotion] || '😐';
+      this.emo.replaceChildren(icon(EMO_ICON[emotion] || 'meh'));
+      this.emoLabel.textContent = EMO_LABEL[emotion] || 'Calm';
+      this.emoLabel.dataset.emo = emotion;
     }
   }
 
   tick() {
-    if (this.calls.state === 'ringing' && this.ringCountdown) this.ringCountdown.textContent = `Ringing… ${Math.ceil(this.calls.ringTimer)}s`;
+    if (this.calls.state === 'ringing' && this.ringCountdown) {
+      this.ringCountdown.textContent = `${Math.ceil(this.calls.ringTimer)}s`;
+      this.ringArc?.style.setProperty('--p', `${Math.max(0, this.calls.ringTimer / this.calls.ringTotal) * 100}`);
+    }
+    // count the number up/down smoothly so trust changes are easy to follow
+    if (this.trustVal && this.targetTrust !== undefined) {
+      this.shownTrust += (this.targetTrust - this.shownTrust) * 0.25;
+      if (Math.abs(this.targetTrust - this.shownTrust) < 0.5) this.shownTrust = this.targetTrust;
+      this.trustVal.textContent = `${Math.round(this.shownTrust)}`;
+    }
     if (this.calls.active && this.timer) {
       const s = Math.floor(this.calls.callTime);
       this.timer.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;

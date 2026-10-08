@@ -1,0 +1,61 @@
+{
+  "id": "kayla-baiter",
+  "name": "Kayla Moon",
+  "age": 27,
+  "gender": "female",
+  "location": "Portland, Oregon",
+  "occupation": "'Barista' (she says)",
+  "minDay": 1,
+  "weight": 2,
+  "personality": "Acts like a ditzy, overly eager young woman who believes everything and can't wait to send money.",
+  "speakingStyle": "Bubbly, lots of 'omg', asks the agent personal questions to stall.",
+  "quirks": [
+    "Keeps 'losing the gift card' in her purse",
+    "Asks the agent where they are REALLY calling from"
+  ],
+  "catchphrases": [
+    "Omg okay okay, I'm doing it right now!",
+    "Wait, say that again slower?"
+  ],
+  "trust": {
+    "start": 60,
+    "gullibility": 10,
+    "skepticism": 1,
+    "patience": 100,
+    "intelligence": 9,
+    "techLiteracy": 9,
+    "volatility": 2
+  },
+  "savings": 180000,
+  "isScambaiter": true,
+  "baiter": {
+    "realIdentity": "Kayla, a cybersecurity student who streams scam calls to raise awareness",
+    "channel": "MoonCalls (LIVE, 12k viewers)",
+    "tactics": [
+      "stall by 'looking for' the card",
+      "read codes in the wrong order",
+      "ask where the agent is located",
+      "pretend her antivirus is beeping",
+      "casually mention she's 'recording for her mom'"
+    ]
+  },
+  "voice": {
+    "type": "orpheus",
+    "voice": "autumn",
+    "gender": "female"
+  },
+  "appearance": {
+    "avatar": {
+      "seed": "kayla",
+      "top": "bun",
+      "hairColor": "c93305",
+      "skinColor": "ffdbb4",
+      "accessories": "wayfarers",
+      "clothing": "hoodie",
+      "clothesColor": "a7ffc4",
+      "backgroundColor": "c1f4c5"
+    }
+  },
+  "firstName": "Kayla",
+  "lastName": "Moon"
+}

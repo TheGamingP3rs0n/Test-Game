@@ -11,11 +11,15 @@ import {
   signTexture, canvasTexture, terrazzoMaps, dropCeilingTexture, clockTexture, drawClock, founderPortraitTexture, exitSignTexture,
 } from './textures.js';
 import { pick } from '../core/util.js';
+import { drawIcon } from '../ui/icons.js';
 
-export const ROOM = { minX: -9, maxX: 9, minZ: -6, maxZ: 6, height: 2.9 };
+export const ROOM = { minX: -9, maxX: 9, minZ: -6, maxZ: 6, height: 3.25 };
 const ROW_Z = [-3.2, -0.4, 2.4];
 const DESK_X = [-6.8, -5.2, -3.6, -2.0, -0.4];
 export const PLAYER_DESK = { x: -2.0, z: 2.4 };
+/** Coworkers at their desks. Kept low (and away from your desk) so the floor doesn't feel crowded. */
+const COWORKER_COUNT = 4;
+const SCREEN = { w: 0.744, h: 0.454, y: 0.343, z: 0.006, tilt: -0.1405 };
 
 const FURNITURE = [
   'desk', 'chairDesk', 'computerScreen', 'computerKeyboard', 'computerMouse', 'wall', 'wallWindow', 'wallDoorway',
@@ -23,6 +27,7 @@ const FURNITURE = [
   'plantSmall2', 'plantSmall3', 'bookcaseClosedWide', 'bookcaseOpen', 'books', 'deskCorner', 'loungeChair', 'loungeSofa', 'sideTable',
   'trashcan', 'cardboardBoxClosed', 'cardboardBoxOpen', 'coatRackStanding', 'laptop', 'radio', 'table',
   'rugRectangle', 'tableCoffee', 'lampRoundFloor', 'speakerSmall',
+  'televisionModern', 'kitchenSink', 'chairCushion', 'stoolBar', 'doorwayOpen',
 ];
 
 /**
@@ -66,28 +71,29 @@ export class Office {
     this.coworkerScreens = [];
     this.npcs = [];
     this.windowRects = [];
+    this.noCallZones = []; // rects where the phone won't ring (break room, restrooms)
+    this.sitSpots = {}; // id -> { pos, yaw, label } for break-room seats
     this.powered = true;
     this.time = 0;
     this.lastClockMinute = -1;
   }
 
-  async build(onProgress) {
+  async build(onProgress = () => {}) {
     await preload([
       ...FURNITURE.map((n) => ['furniture', n]),
-      ...[CHARACTERS.boss, CHARACTERS.police, ...CHARACTERS.coworkers].map((n) => ['characters', n]),
-      ['vehicles', 'police'], ['vehicles', 'taxi'], ['vehicles', 'van'], ['animals', 'animal-cow'], ['food', 'cup-tea'], ['food', 'pizza-box'], ['food', 'mug'],
-    ], onProgress);
-
-    this.buildShell();
-    this.buildOutside();
-    await this.buildWalls();
-    this.buildLights();
-    await this.buildDesks();
-    await this.buildKitchen();
-    await this.buildBossOffice();
-    await this.buildProps();
-    await this.buildDecor();
-    await this.buildCharacters();
+      ...[CHARACTERS.boss, CHARACTERS.police, ...CHARACTERS.coworkers.slice(0, COWORKER_COUNT)].map((n) => ['characters', n]),
+      ['vehicles', 'police'], ['vehicles', 'taxi'], ['vehicles', 'van'], ['vehicles', 'delivery'], ['vehicles', 'ambulance'], ['animals', 'animal-cow'], ['food', 'cup-tea'], ['food', 'pizza-box'], ['food', 'mug'],
+    ], (p) => onProgress(p * 0.6));
+    // build in steps, letting the browser breathe (and the loading bar move) in between
+    const steps = [
+      () => this.buildShell(), () => this.buildOutside(), () => this.buildWalls(), () => this.buildLights(), () => this.buildDesks(),
+      () => this.buildKitchen(), () => this.buildBossOffice(), () => this.buildAmenities(), () => this.buildStairwell(), () => this.buildStreetLife(), () => this.buildProps(), () => this.buildDecor(), () => this.buildCharacters(),
+    ];
+    for (let i = 0; i < steps.length; i++) {
+      await steps[i]();
+      onProgress(0.6 + ((i + 1) / steps.length) * 0.4);
+      await new Promise((r) => setTimeout(r, 0));
+    }
   }
 
   // ---------------------------------------------------------------- structure
@@ -106,7 +112,7 @@ export class Office {
 
     const ceilTex = dropCeilingTexture([w / 2.4, d / 2.4]);
     // a little self-illumination stands in for light bouncing off the desks onto the tiles
-    this.ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex, emissiveMap: ceilTex, emissive: 0x3a352c, roughness: 0.95, envMapIntensity: 0.3 });
+    this.ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex, emissiveMap: ceilTex, emissive: 0x241f18, roughness: 0.95, envMapIntensity: 0.25 });
     const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), this.ceilMat);
     ceil.rotation.x = Math.PI / 2;
     ceil.position.y = ROOM.height;
@@ -114,10 +120,14 @@ export class Office {
     this.root.add(ceil);
 
     this.colliders.push(
-      { minX: -99, maxX: ROOM.minX + 0.15, minZ: -99, maxZ: 99 },
-      { minX: ROOM.maxX - 0.15, maxX: 99, minZ: -99, maxZ: 99 },
+      { minX: -99, maxX: ROOM.minX + 0.15, minZ: -99, maxZ: ROOM.maxZ },
+      // right wall, with a gap at the EXIT doorway (z≈3) into the stairwell
+      { minX: ROOM.maxX - 0.15, maxX: ROOM.maxX + 0.1, minZ: -99, maxZ: 2.5 },
+      { minX: ROOM.maxX - 0.15, maxX: ROOM.maxX + 0.1, minZ: 3.5, maxZ: ROOM.maxZ },
       { minX: -99, maxX: 99, minZ: -99, maxZ: ROOM.minZ + 0.15 },
-      { minX: -99, maxX: 99, minZ: ROOM.maxZ - 0.15, maxZ: 99 },
+      // back wall of the MAIN room, with a doorway gap (X[-1,1]) through to the back wing
+      { minX: -99, maxX: -1.0, minZ: ROOM.maxZ - 0.15, maxZ: ROOM.maxZ + 0.1 },
+      { minX: 1.0, maxX: 99, minZ: ROOM.maxZ - 0.15, maxZ: ROOM.maxZ + 0.1 },
     );
   }
 
@@ -213,7 +223,8 @@ export class Office {
       this.root.add(tube);
     }
     // our building's outer shell
-    box(18.2, 0.5, 12.1, M.matte(0x8a7f6c), [0, ROOM.height + 0.25, 0], this.root);
+    // roof slab: starts 3cm above the ceiling tiles (it used to sit exactly on them and z-fight)
+    box(18.4, 0.5, 12.4, M.matte(0x8a7f6c), [0, ROOM.height + 0.03 + 0.25, 0], this.root);
     box(20, 3.2, 14, M.matte(0x8a7f6c), [0, -1.61, 0], this.root, { cast: false });
   }
 
@@ -223,7 +234,8 @@ export class Office {
     const rail = new THREE.MeshStandardMaterial({ color: 0x6e4f33, roughness: 0.45, envMapIntensity: 0.7 });
     const segs = [];
     for (let x = ROOM.minX; x < ROOM.maxX; x += 2) segs.push({ x: x + 1, z: ROOM.minZ, rot: 0, kind: 'wallWindow' });
-    for (let x = ROOM.minX; x < ROOM.maxX; x += 2) segs.push({ x: x + 1, z: ROOM.maxZ, rot: Math.PI, kind: 'wall' });
+    // back wall — leave the centre segment out as a doorway into the back wing (hall + rooms)
+    for (let x = ROOM.minX; x < ROOM.maxX; x += 2) { if (Math.abs(x + 1) < 0.1) continue; segs.push({ x: x + 1, z: ROOM.maxZ, rot: Math.PI, kind: 'wall' }); }
     for (let z = ROOM.minZ; z < ROOM.maxZ; z += 2) segs.push({ x: ROOM.minX, z: z + 1, rot: Math.PI / 2, kind: 'wall' });
     for (let z = ROOM.minZ; z < ROOM.maxZ; z += 2) segs.push({ x: ROOM.maxX, z: z + 1, rot: -Math.PI / 2, kind: Math.abs(z + 1 - 3) < 0.1 ? 'wallDoorway' : 'wall' });
     for (const s of segs) {
@@ -280,7 +292,7 @@ export class Office {
 
   buildLights() {
     // fixture housings + glowing diffusers; the actual light comes from RectAreaLights
-    this.diffuserMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3dc, emissiveIntensity: 1.6, roughness: 0.4 });
+    this.diffuserMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3dc, emissiveIntensity: 1.15, roughness: 0.4 });
     const frameMat = M.metal(0xd6d3cc, 0.35);
     const fixtures = [];
     for (const x of [-5.6, -1.6]) for (const z of [-3.0, -0.2, 2.6]) fixtures.push({ x, z, w: 2.4, d: 0.6, intensity: 3.2 });
@@ -329,16 +341,20 @@ export class Office {
           new THREE.Vector3(x + 0.05, 0.9, z - 0.2), new THREE.Vector3(x + 0.1, 0.78, z - 0.36), new THREE.Vector3(x + 0.2, 0.3, z - 0.38), new THREE.Vector3(x + 0.3, 0.01, z - 0.3),
         ]), 16, 0.008, 5), cableMat);
         this.root.add(cable);
+        // The display covers the monitor's light-grey panel exactly: Kenney's panel is
+        // 0.758 x 0.467 m (at furniture scale), centred 0.343 m above the desk and tilted
+        // back ~8 degrees.
         const tex = screenTexture(isPlayer ? 'desktop' : 'coworker');
-        const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 0.42), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
-        screen.position.set(x, 0.76 + 0.33, z - 0.07);
+        const screen = new THREE.Mesh(new THREE.PlaneGeometry(SCREEN.w, SCREEN.h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+        screen.position.set(x, 0.76 + SCREEN.y, z - 0.12 + SCREEN.z);
+        screen.rotation.x = SCREEN.tilt;
         this.root.add(screen);
         this.colliders.push({ minX: x - 0.75, maxX: x + 0.75, minZ: z - 0.45, maxZ: z + 0.4 });
         if (isPlayer) {
           this.playerScreen = tex;
           this.playerScreenMesh = screen;
           this.playerSeat = { pos: new THREE.Vector3(x, 0, z + 0.85), yaw: 0 };
-          this.monitorView = { pos: new THREE.Vector3(x, 1.12, z + 0.42), target: new THREE.Vector3(x, 1.08, z - 0.07) };
+          this.monitorView = { pos: new THREE.Vector3(x, 1.16, z + 0.46), target: new THREE.Vector3(x, 0.76 + SCREEN.y, z - 0.12) };
           this.playerChair = chair;
           await this.buildPlayerDeskExtras(x, z);
           this.register({ id: 'computer', object: screen, label: 'Use computer', radius: 2.2 });
@@ -495,6 +511,302 @@ export class Office {
     this.register({ id: 'bossdoor', object: label, label: 'Knock on boss door', radius: 2.5 });
   }
 
+  // The BACK WING: a doorway in the main room's back wall opens onto a hallway that
+  // leads to a proper break room (right) and the restrooms (left) — real separate rooms.
+  async buildAmenities() {
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xe3dac4, roughness: 0.82, envMapIntensity: 0.35 });
+    const frameMat = M.metal(0xd6d3cc, 0.35);
+    const tileMat = new THREE.MeshStandardMaterial({ color: 0xd4dde1, roughness: 0.3, envMapIntensity: 0.7 });
+    const carpetMat = new THREE.MeshStandardMaterial({ ...terrazzoMaps([6, 6]), roughness: 1, metalness: 0, envMapIntensity: 0.5 });
+    const glass = M.glass(0xbcd6e6, 0.12);
+    const H = ROOM.height;
+    const TH = 0.18; // wall thickness
+
+    // ---- generic builders --------------------------------------------------
+    const floorCeil = (minX, maxX, minZ, maxZ, floorMat) => {
+      const w = maxX - minX, d = maxZ - minZ, cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+      const fl = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
+      fl.rotation.x = -Math.PI / 2; fl.position.set(cx, 0.003, cz); fl.receiveShadow = true; this.root.add(fl);
+      const cl = new THREE.Mesh(new THREE.PlaneGeometry(w, d), this.ceilMat);
+      cl.rotation.x = Math.PI / 2; cl.position.set(cx, H, cz); cl.receiveShadow = true; this.root.add(cl);
+    };
+    // a wall along an axis ('x' runs along X at z=fixed; 'z' runs along Z at x=fixed),
+    // with any number of doorway gaps [from,to]. Builds mesh + colliders + lintels/frames.
+    const wall = (axis, fixed, a, b, gaps = []) => {
+      const g = [...gaps].sort((p, q) => p[0] - q[0]);
+      const runs = []; let cur = a;
+      for (const [s, e] of g) { if (s > cur) runs.push([cur, s]); cur = Math.max(cur, e); }
+      if (cur < b) runs.push([cur, b]);
+      for (const [s, e] of runs) {
+        if (e - s < 0.02) continue;
+        const mid = (s + e) / 2, len = e - s;
+        if (axis === 'x') {
+          box(len, H, TH, wallMat, [mid, H / 2, fixed], this.root, { cast: false });
+          this.colliders.push({ minX: s, maxX: e, minZ: fixed - TH / 2 - 0.04, maxZ: fixed + TH / 2 + 0.04 });
+        } else {
+          box(TH, H, len, wallMat, [fixed, H / 2, mid], this.root, { cast: false });
+          this.colliders.push({ minX: fixed - TH / 2 - 0.04, maxX: fixed + TH / 2 + 0.04, minZ: s, maxZ: e });
+        }
+      }
+      for (const [s, e] of g) { // lintel over the 2.1m opening + jamb posts
+        const dh = H - 2.1, gc = (s + e) / 2, gw = e - s;
+        if (axis === 'x') {
+          box(gw, dh, TH, wallMat, [gc, 2.1 + dh / 2, fixed], this.root, { cast: false });
+          box(0.09, 2.12, 0.22, frameMat, [s, 1.06, fixed], this.root, { cast: false });
+          box(0.09, 2.12, 0.22, frameMat, [e, 1.06, fixed], this.root, { cast: false });
+        } else {
+          box(TH, dh, gw, wallMat, [fixed, 2.1 + dh / 2, gc], this.root, { cast: false });
+          box(0.22, 2.12, 0.09, frameMat, [fixed, 1.06, s], this.root, { cast: false });
+          box(0.22, 2.12, 0.09, frameMat, [fixed, 1.06, e], this.root, { cast: false });
+        }
+      }
+    };
+    const ceilingLight = (cx, cz, w = 2.0, d = 1.0, intensity = 5.5, color = 0xfff3dc) => {
+      box(w + 0.08, 0.06, d + 0.08, frameMat, [cx, H - 0.03, cz], this.root, { cast: false });
+      const diff = new THREE.Mesh(new THREE.PlaneGeometry(w, d), this.diffuserMat);
+      diff.rotation.x = Math.PI / 2; diff.position.set(cx, H - 0.066, cz); this.root.add(diff);
+      const lp = new THREE.PointLight(color, intensity, 8, 2.2);
+      lp.position.set(cx, H - 0.4, cz); this.rig.addAccent(lp);
+    };
+    const sign = (text, w, pos, rotY, bg = '#243447') => {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.22), new THREE.MeshStandardMaterial({ roughness: 0.4, map: canvasTexture(384, 84, (ctx) => {
+        ctx.fillStyle = bg; ctx.fillRect(0, 0, 384, 84);
+        ctx.fillStyle = '#ffd34d'; ctx.font = 'bold 34px "Bungee", Impact'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, 192, 46);
+      }) }));
+      s.position.set(...pos); s.rotation.y = rotY; this.root.add(s);
+    };
+    const seat = (id, x, z, yaw, cushColor, label = 'Sit down — take a break') => {
+      const cushion = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.42), new THREE.MeshStandardMaterial({ color: cushColor, roughness: 0.8, emissive: cushColor, emissiveIntensity: 0.1 }));
+      cushion.position.set(x, 0.47, z); cushion.castShadow = true; this.root.add(cushion);
+      this.sitSpots[id] = { pos: new THREE.Vector3(x, 0, z), yaw };
+      this.register({ id, object: cushion, label, radius: 1.9 });
+    };
+
+    // ===================== HALLWAY  X[-8,8]  Z[6,8.5] ======================
+    floorCeil(-8, 8, 6, 8.62, carpetMat);
+    wall('z', -8, 6, 12.5);                 // left/outer wall (hall + restroom)
+    wall('z', 8, 6, 13);                    // right/outer wall (hall + break)
+    wall('x', 8.5, -8, 8, [[-5.6, -4.1], [4.1, 5.6]]); // back-of-hall wall: two room doorways
+    // main-room entrance doorway frame (the X[-1,1] gap left in the back wall)
+    box(2.0, H - 2.1, 0.2, wallMat, [0, 2.1 + (H - 2.1) / 2, ROOM.maxZ], this.root, { cast: false });
+    box(0.1, 2.12, 0.24, frameMat, [-1, 1.06, ROOM.maxZ], this.root, { cast: false });
+    box(0.1, 2.12, 0.24, frameMat, [1, 1.06, ROOM.maxZ], this.root, { cast: false });
+    ceilingLight(-4.5, 7.3, 2.2, 0.8); ceilingLight(0, 7.3, 2.2, 0.8); ceilingLight(4.5, 7.3, 2.2, 0.8);
+    sign('BREAK ROOM →', 1.5, [4.85, 2.4, 8.46], Math.PI);
+    sign('← RESTROOMS', 1.5, [-4.85, 2.4, 8.46], Math.PI);
+    sign('STAFF ONLY', 0.9, [0, 2.45, ROOM.maxZ - 0.02], Math.PI, '#7a1010');
+    // hallway decor: a bench, a water cooler, a plant, a notice board
+    this.root.add(pivot(await instance('furniture', 'loungeChair'), { x: -2.4, z: 8.0, rotY: Math.PI }));
+    this.root.add(pivot(await instance('furniture', 'loungeChair'), { x: -1.4, z: 8.0, rotY: Math.PI }));
+    this.root.add(pivot(await instance('furniture', 'pottedPlant'), { x: 7.4, z: 7.9 }));
+    this.root.add(pivot(await instance('furniture', 'pottedPlant'), { x: -7.4, z: 7.9 }));
+    const notice = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.9), new THREE.MeshStandardMaterial({ map: posterTexture({ title: 'STAFF NOTICES', sub: 'Do NOT microwave fish.', bg: '#2a3b2f', fg: '#ffe14d' }), roughness: 0.6 }));
+    notice.position.set(2.5, 1.7, 8.44); notice.rotation.y = Math.PI; this.root.add(notice);
+
+    // ===================== BREAK ROOM  X[2.5,8]  Z[8.5,13] =================
+    floorCeil(2.5, 8, 8.4, 13, carpetMat);
+    wall('z', 2.5, 8.5, 13);               // break-room left wall
+    ceilingLight(4.2, 10.0, 2.2, 1.0); ceilingLight(6.4, 11.2, 1.6, 1.0);
+    this.noCallZones.push({ minX: 2.5, maxX: 8, minZ: 8.5, maxZ: 13, kind: 'break' });
+    // glass curtain wall at the back (z=13) looking onto a back lot
+    box(5.5, 0.32, TH, wallMat, [5.25, 0.16, 13], this.root, { cast: false });
+    box(5.5, 2.45, 0.05, glass, [5.25, 1.55, 13], this.root, { cast: false });
+    box(5.5, 0.3, TH, wallMat, [5.25, H - 0.15, 13], this.root, { cast: false });
+    for (const mx of [2.5, 3.9, 5.25, 6.6, 8]) box(0.08, 2.5, 0.12, frameMat, [mx, 1.55, 13], this.root, { cast: false });
+    this.colliders.push({ minX: 2.5, maxX: 8, minZ: 13 - TH, maxZ: 13 + TH });
+    // wall TV on the left wall, facing into the room
+    box(0.06, 0.9, 1.5, M.plastic(0x0b0b0b, 0.3), [2.62, 1.75, 10.2], this.root, { cast: false });
+    const tvScreen = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), new THREE.MeshStandardMaterial({ color: 0x0a0f14, emissive: 0x2b6cff, emissiveIntensity: 0.6, roughness: 0.3 }));
+    tvScreen.position.set(2.66, 1.75, 10.2); tvScreen.rotation.y = Math.PI / 2; this.root.add(tvScreen);
+    this.breakTv = tvScreen;
+    const tvL = new THREE.RectAreaLight(0x5a8cff, 1.3, 1.4, 0.8); tvL.position.set(2.72, 1.75, 10.2); tvL.lookAt(6, 1.5, 10.2); this.rig.addAccent(tvL);
+    // vending machine against the right wall
+    const vend = new THREE.Group();
+    box(0.9, 1.9, 0.6, M.plastic(0xc21f1f, 0.4), [0, 0.95, 0], vend);
+    box(0.62, 1.4, 0.04, new THREE.MeshStandardMaterial({ color: 0x0a0f14, emissive: 0x18324a, emissiveIntensity: 0.8, roughness: 0.2 }), [0.1, 1.05, -0.3], vend, { cast: false });
+    vend.position.set(7.5, 0, 9.1); vend.rotation.y = -Math.PI / 2; this.root.add(vend);
+    this.colliders.push({ minX: 7.2, maxX: 8, minZ: 8.6, maxZ: 9.6 });
+    const vendLight = new THREE.PointLight(0x66aaff, 6, 3, 2);
+    vendLight.position.set(7.2, 1.2, 9.1);
+    this.rig.addAccent(vendLight).userData.keepOnOutage = true;
+    // sofa (faces the back windows), coffee table, two lounge chairs
+    this.root.add(pivot(await instance('furniture', 'loungeSofa'), { x: 5.1, z: 9.15, rotY: 0 }));
+    this.root.add(pivot(await instance('furniture', 'tableCoffee'), { x: 5.1, z: 10.7 }));
+    this.root.add(pivot(await instance('furniture', 'loungeChair'), { x: 3.3, z: 10.7, rotY: Math.PI / 2 }));
+    this.root.add(pivot(await instance('furniture', 'loungeChair'), { x: 6.9, z: 10.7, rotY: -Math.PI / 2 }));
+    this.root.add(pivot(await instance('furniture', 'table'), { x: 3.5, z: 12.1, rotY: 0 }));
+    this.root.add(pivot(await instance('furniture', 'chairCushion'), { x: 2.75, z: 12.1, rotY: Math.PI / 2 }));
+    this.root.add(pivot(await instance('furniture', 'chairCushion'), { x: 4.25, z: 12.1, rotY: -Math.PI / 2 }));
+    this.root.add(pivot(await instance('furniture', 'pottedPlant'), { x: 7.4, z: 12.4 }));
+    this.colliders.push({ minX: 4.3, maxX: 5.9, minZ: 8.8, maxZ: 9.5 }, { minX: 4.6, maxX: 5.6, minZ: 10.3, maxZ: 11.1 });
+    this.colliders.push({ minX: 3.0, maxX: 3.6, minZ: 10.4, maxZ: 11.0 }, { minX: 6.6, maxX: 7.2, minZ: 10.4, maxZ: 11.0 }, { minX: 3.0, maxX: 4.0, minZ: 11.8, maxZ: 12.4 });
+    seat('sit:sofaL', 4.72, 9.5, Math.PI, 0x3f8f6f);
+    seat('sit:sofaR', 5.48, 9.5, Math.PI, 0x3f8f6f);
+    seat('sit:chairL', 3.45, 10.7, -Math.PI / 2, 0x6f5fb0);
+    seat('sit:chairR', 6.75, 10.7, Math.PI / 2, 0x6f5fb0);
+    seat('sit:tableL', 2.95, 12.1, -Math.PI / 2, 0xc98a3a, 'Sit at the table');
+    seat('sit:tableR', 4.05, 12.1, Math.PI / 2, 0xc98a3a, 'Sit at the table');
+
+    // back lot visible through the break-room windows (z>13)
+    const lotGround = new THREE.Mesh(new THREE.PlaneGeometry(16, 12), M.matte(0x4a4640));
+    lotGround.rotation.x = -Math.PI / 2; lotGround.position.set(5.25, 0.0, 19); lotGround.receiveShadow = true; this.root.add(lotGround);
+    for (let x = 3; x <= 7.5; x += 1.5) { const ln = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 2.2), M.matte(0xd8cf9e)); ln.rotation.x = -Math.PI / 2; ln.position.set(x, 0.01, 15.5); this.root.add(ln); }
+    this.root.add(pivot(await instance('vehicles', 'van'), { x: 4.2, z: 15.6, rotY: -Math.PI / 2 }));
+    this.root.add(pivot(await instance('vehicles', 'taxi'), { x: 6.6, z: 15.8, rotY: -Math.PI / 2 }));
+    box(16, 2.4, 0.3, M.matte(0x6b6358), [5.25, 1.2, 24.5], this.root, { cast: false }); // boundary wall
+    const lotLamp = new THREE.PointLight(0xffd9a0, 3.5, 16, 2); lotLamp.position.set(5.25, 3.2, 17); this.rig.addAccent(lotLamp);
+
+    // ===================== RESTROOMS  X[-8,-2.5]  Z[8.5,12.5] ==============
+    floorCeil(-8, -2.5, 8.4, 12.5, tileMat);
+    wall('z', -2.5, 8.5, 12.5);            // restroom right wall
+    wall('x', 12.5, -8, -2.5);             // restroom back wall
+    ceilingLight(-6.3, 10.0, 1.8, 1.0); ceilingLight(-3.6, 10.6, 1.4, 1.0);
+    this.noCallZones.push({ minX: -8, maxX: -2.5, minZ: 8.5, maxZ: 12.5, kind: 'restroom' });
+    // tiled splash on the back wall
+    box(5.3, 1.7, 0.03, tileMat, [-5.25, 0.85, 12.42], this.root, { cast: false });
+    const stallMat = new THREE.MeshStandardMaterial({ color: 0x8a9aa6, roughness: 0.4, envMapIntensity: 0.4 });
+    const toilet = (cx, id) => {
+      const g = new THREE.Group();
+      box(0.4, 0.32, 0.5, M.plastic(0xf4f4f0, 0.3), [0, 0.16, -0.02], g);
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.15, 0.16, 16), M.plastic(0xf8f8f4, 0.25));
+      bowl.position.set(0, 0.4, -0.1); g.add(bowl);
+      box(0.36, 0.42, 0.14, M.plastic(0xf4f4f0, 0.3), [0, 0.5, 0.2], g);
+      g.position.set(cx, 0, 12.15); this.root.add(g);
+      if (id) { this.sitSpots[id] = { pos: new THREE.Vector3(cx, 0, 11.8), yaw: 0 }; this.register({ id, object: g, label: 'Use the restroom (a nice break)', radius: 1.5 }); }
+    };
+    for (const sx of [-7.4, -6.0, -4.6, -3.2]) box(0.04, 1.6, 1.15, stallMat, [sx, 0.8, 11.95], this.root, { cast: false });
+    toilet(-6.7, 'sit:wcL'); toilet(-5.3, 'sit:wcR'); toilet(-3.9, null);
+    // sink counter + mirror on the right wall
+    const counter = new THREE.Group();
+    box(1.8, 0.08, 0.5, M.plastic(0x2a2a30, 0.3), [0, 0.86, 0], counter);
+    for (const sz of [-0.55, 0.0, 0.55]) {
+      const basin = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.1, 0.1, 16), M.plastic(0xf2f2ee, 0.25));
+      basin.position.set(0, 0.9, sz); counter.add(basin);
+    }
+    counter.position.set(-2.75, 0, 9.6); counter.rotation.y = Math.PI / 2; this.root.add(counter);
+    this.colliders.push({ minX: -2.95, maxX: -2.45, minZ: 8.7, maxZ: 10.5 });
+    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.6), new THREE.MeshStandardMaterial({ color: 0x9fb4c0, metalness: 0.9, roughness: 0.1, envMapIntensity: 1.2 }));
+    mirror.position.set(-2.69, 1.45, 9.6); mirror.rotation.y = -Math.PI / 2; this.root.add(mirror);
+  }
+
+  // Traffic on the street out front (two lanes), trees and lamps on the sidewalk, and an
+  // occasional car through the back alley behind the break room.
+  async buildStreetLife() {
+    const GY = -3.2; // street level
+    this.traffic = [];
+    const kinds = ['taxi', 'van', 'delivery', 'taxi', 'van', 'taxi', 'ambulance', 'delivery'];
+    const lanes = [{ z: -11.2, dir: 1 }, { z: -13.0, dir: -1 }];
+    for (let i = 0; i < kinds.length; i++) {
+      const lane = lanes[i % 2];
+      const car = pivot(await instance('vehicles', kinds[i], { scale: 1.2 }), { x: 0, y: GY, z: lane.z, rotY: lane.dir > 0 ? Math.PI / 2 : -Math.PI / 2 });
+      car.userData.lane = lane;
+      car.userData.speed = 6 + Math.random() * 6;
+      car.position.x = -46 + Math.random() * 92;
+      car.userData.wait = 0;
+      this.root.add(car);
+      this.traffic.push(car);
+    }
+    // back alley (seen through the break-room windows)
+    const alleyCar = pivot(await instance('vehicles', 'taxi', { scale: 1.1 }), { x: -20, y: 0, z: 21.5, rotY: Math.PI / 2 });
+    alleyCar.userData.lane = { z: 21.5, dir: 1 }; alleyCar.userData.speed = 4; alleyCar.userData.wait = 6; alleyCar.userData.range = 22;
+    this.root.add(alleyCar);
+    this.traffic.push(alleyCar);
+    const alley = new THREE.Mesh(new THREE.PlaneGeometry(60, 5), M.matte(0x3d3a36));
+    alley.rotation.x = -Math.PI / 2; alley.position.set(5, 0.004, 21.5); this.root.add(alley);
+    // sidewalk trees + street lamps
+    const trunk = M.matte(0x5a4030);
+    const leaves = [M.matte(0x3f8a3a), M.matte(0x4d9a42), M.matte(0x367a33)];
+    const lampMat = M.metal(0x2c2f33, 0.4);
+    for (let x = -34; x <= 34; x += 8.5) {
+      const t = new THREE.Group();
+      box(0.22, 2.2, 0.22, trunk, [0, 1.1, 0], t, { cast: false });
+      const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.25, 0), leaves[Math.abs(Math.round(x)) % 3]);
+      crown.position.y = 2.9; crown.scale.set(1, 0.9, 1); t.add(crown);
+      t.position.set(x, GY, -8.6); this.root.add(t);
+      const lamp = new THREE.Group();
+      box(0.12, 4.2, 0.12, lampMat, [0, 2.1, 0], lamp, { cast: false });
+      box(0.9, 0.08, 0.12, lampMat, [0.4, 4.15, 0], lamp, { cast: false });
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.25), new THREE.MeshStandardMaterial({ color: 0xfff1c4, emissive: 0xffd98a, emissiveIntensity: 1.2 }));
+      head.position.set(0.75, 4.08, 0); lamp.add(head);
+      lamp.position.set(x + 4.2, GY, -8.9); lamp.rotation.y = -Math.PI / 2; this.root.add(lamp);
+    }
+  }
+
+  updateTraffic(dt) {
+    if (!this.traffic) return;
+    for (const car of this.traffic) {
+      const u = car.userData;
+      if (u.wait > 0) { u.wait -= dt; car.visible = u.wait <= 0; continue; }
+      car.visible = true;
+      car.position.x += u.lane.dir * u.speed * dt;
+      const range = u.range || 46;
+      if (Math.abs(car.position.x) > range) {
+        // drive off, then respawn at the other end after a pause, at a new speed
+        car.position.x = -u.lane.dir * range;
+        u.speed = (u.range ? 3 : 6) + Math.random() * (u.range ? 3 : 7);
+        u.wait = u.range ? 8 + Math.random() * 14 : Math.random() * 4;
+        car.visible = false;
+      }
+    }
+  }
+
+  // Behind the EXIT door: a stairwell landing with stairs down to the street. Taking the
+  // stairs lets you leave work (clock out early).
+  buildStairwell() {
+    const H = ROOM.height;
+    const X0 = ROOM.maxX, X1 = 12.6, Z0 = 1.5, Z1 = 4.5;
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xcfc7b4, roughness: 0.85, envMapIntensity: 0.3 });
+    const stepMat = new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.9 });
+    const railMat = M.metal(0xd8b23a, 0.35);
+    const landingEnd = 10.5;
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x7c776d, roughness: 0.95 });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(landingEnd - X0, Z1 - Z0), floorMat);
+    floor.rotation.x = -Math.PI / 2; floor.position.set((X0 + landingEnd) / 2, 0.002, (Z0 + Z1) / 2); floor.receiveShadow = true; this.root.add(floor);
+    const pit = new THREE.Mesh(new THREE.PlaneGeometry(X1 - landingEnd, Z1 - Z0), floorMat);
+    pit.rotation.x = -Math.PI / 2; pit.position.set((landingEnd + X1) / 2, -2.2, (Z0 + Z1) / 2); this.root.add(pit);
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0, Z1 - Z0), this.ceilMat);
+    ceil.rotation.x = Math.PI / 2; ceil.position.set((X0 + X1) / 2, H, (Z0 + Z1) / 2); this.root.add(ceil);
+    // walls: two sides + far end (with a window), all solid for movement
+    const D = 2.3; // walls run below the landing so the stairwell has depth
+    box(X1 - X0, H + D, 0.16, wallMat, [(X0 + X1) / 2, (H - D) / 2, Z0], this.root, { cast: false });
+    box(X1 - X0, H + D, 0.16, wallMat, [(X0 + X1) / 2, (H - D) / 2, Z1], this.root, { cast: false });
+    box(0.16, 0.9 + D, Z1 - Z0, wallMat, [X1, (0.9 - D) / 2, (Z0 + Z1) / 2], this.root, { cast: false });
+    box(0.16, D, Z1 - Z0, wallMat, [landingEnd - 0.02, -D / 2, (Z0 + Z1) / 2], this.root, { cast: false }); // landing edge face
+    box(0.16, 0.7, Z1 - Z0, wallMat, [X1, H - 0.35, (Z0 + Z1) / 2], this.root, { cast: false });
+    box(0.04, H - 1.6, Z1 - Z0 - 0.3, M.glass(0xbcd6e6, 0.14), [X1, 0.9 + (H - 1.6) / 2, (Z0 + Z1) / 2], this.root, { cast: false });
+    // stairs going down (toward the far end) — a solid flight you look down into
+    for (let i = 0; i < 9; i++) {
+      const x = landingEnd + 0.24 * i + 0.12;
+      const top = -0.19 * (i + 1);
+      const blk = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.19, 1.4), stepMat);
+      blk.position.set(x, top + 0.095, 3.65); blk.receiveShadow = true; this.root.add(blk);
+    }
+    box(X1 - landingEnd, 0.06, 1.5, stepMat, [(landingEnd + X1) / 2, -1.9, 2.25], this.root, { cast: false }); // lower landing hint
+    // railing along the stair edge
+    box(X1 - landingEnd, 0.05, 0.05, railMat, [(landingEnd + X1) / 2, 0.95, 2.92], this.root, { cast: false });
+    for (const x of [landingEnd, (landingEnd + X1) / 2, X1 - 0.1]) box(0.05, 0.95, 0.05, railMat, [x, 0.475, 2.92], this.root, { cast: false });
+    // colliders: side walls, far end, and the drop (you can't walk down the stairs — use E)
+    this.colliders.push(
+      { minX: X0, maxX: X1 + 0.2, minZ: Z0 - 0.2, maxZ: Z0 + 0.1 },
+      { minX: X0, maxX: X1 + 0.2, minZ: Z1 - 0.1, maxZ: Z1 + 0.2 },
+      { minX: landingEnd, maxX: X1 + 0.2, minZ: Z0, maxZ: Z1 },
+    );
+    const lp = new THREE.PointLight(0xfff1d6, 4, 6, 2); lp.position.set(10.2, H - 0.4, 3); this.rig.addAccent(lp).userData.keepOnOutage = true;
+    box(0.9, 0.05, 0.5, M.metal(0xd6d3cc, 0.35), [10.2, H - 0.03, 3], this.root, { cast: false });
+    // signage + the interactable "take the stairs"
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.34), new THREE.MeshStandardMaterial({ roughness: 0.4, map: canvasTexture(320, 100, (ctx) => {
+      ctx.fillStyle = '#1f7a3a'; ctx.fillRect(0, 0, 320, 100);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 34px "Bungee", Impact'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('STREET LEVEL', 160, 38); ctx.font = 'bold 22px Inter, Arial'; ctx.fillText('stairs down \u2193', 160, 76);
+    }) }));
+    sign.position.set(11.2, 1.9, Z0 + 0.09); this.root.add(sign);
+    // invisible hit-box over the top of the stairs (aim anywhere at the stair opening)
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.0, 2.6), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+    bar.position.set(10.75, 0.9, 3.0); this.root.add(bar);
+    this.register({ id: 'exit', object: bar, label: 'Take the stairs — leave work', radius: 1.8 });
+  }
+
   async buildProps() {
     // quota TV hanging at the front of the floor
     this.boardTex = quotaBoardTexture();
@@ -523,7 +835,8 @@ export class Office {
       ctx.fillStyle = '#000';
       ctx.font = 'bold 18px Inter, Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('⚡ BREAKERS', 64, 31);
+      ctx.fillText('BREAKERS', 70, 31);
+      drawIcon(ctx, 'zap', 6, 12, 20, '#000', 2.6);
     }) }));
     warn.position.set(0.07, 0.45, 0);
     warn.rotation.y = Math.PI / 2;
@@ -556,19 +869,46 @@ export class Office {
     this.register({ id: 'router', object: router, label: 'Wi-Fi router', radius: 2 });
 
     // shredder
+    // industrial shredder: bin with a see-through window full of strips, a silver head
+    // unit with a feed throat, control panel LEDs, warning label and casters
     const sh = new THREE.Group();
-    box(0.5, 0.7, 0.4, M.plastic(0x2d2d2d, 0.4), [0, 0.35, 0], sh);
-    box(0.52, 0.06, 0.42, M.plastic(0x111111, 0.3), [0, 0.73, 0], sh);
-    box(0.3, 0.01, 0.02, M.plastic(0x000000), [0, 0.765, 0], sh);
-    this.shredPaper = box(0.28, 0.12, 0.2, M.matte(0xf2f2f2), [0, 0.86, 0.05], sh);
+    const body = M.plastic(0x2b2f35, 0.45);
+    const trim = M.metal(0xb9bec4, 0.3);
+    box(0.56, 0.66, 0.44, body, [0, 0.38, 0], sh); // bin
+    box(0.6, 0.04, 0.48, trim, [0, 0.06, 0], sh); // base plate
+    for (const [x, z] of [[-0.24, -0.18], [0.24, -0.18], [-0.24, 0.18], [0.24, 0.18]]) {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.04, 14), M.plastic(0x111111, 0.6));
+      w.rotation.z = Math.PI / 2; w.position.set(x, 0.035, z); sh.add(w);
+    }
+    // window with shreds behind it
+    box(0.36, 0.34, 0.012, new THREE.MeshPhysicalMaterial({ color: 0x9fb8c8, transparent: true, opacity: 0.32, roughness: 0.05 }), [0, 0.36, 0.224], sh, { cast: false });
+    const shredMats = [M.matte(0xf4f1e8), M.matte(0xe9f0f7), M.matte(0xfff2c4)];
+    for (let i = 0; i < 46; i++) {
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.05 + Math.random() * 0.12, 0.004), shredMats[i % 3]);
+      strip.position.set(-0.16 + Math.random() * 0.32, 0.22 + Math.random() * 0.2, 0.1 + Math.random() * 0.1);
+      strip.rotation.set(Math.random() * 1.4, Math.random() * 3, Math.random() * 1.4);
+      sh.add(strip);
+    }
+    box(0.62, 0.16, 0.5, trim, [0, 0.79, 0], sh); // head unit
+    box(0.4, 0.02, 0.05, M.plastic(0x050505, 0.2), [0, 0.875, -0.04], sh, { cast: false }); // feed throat
+    box(0.18, 0.03, 0.1, M.plastic(0x1a1a1a, 0.3), [0.18, 0.88, 0.15], sh, { cast: false }); // control panel
+    const led = (x, c) => { const l = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.6 })); l.position.set(x, 0.9, 0.15); sh.add(l); return l; };
+    this.shredLedGreen = led(0.13, 0x33ff66); led(0.17, 0xff3344);
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.02, 14), trim); knob.position.set(0.23, 0.9, 0.15); sh.add(knob);
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.09), new THREE.MeshStandardMaterial({ roughness: 0.5, map: canvasTexture(256, 76, (ctx) => {
+      ctx.fillStyle = '#ffcc00'; ctx.fillRect(0, 0, 256, 76); ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 256, 10); ctx.fillRect(0, 66, 256, 10);
+      ctx.font = 'bold 22px Inter, Arial'; ctx.textAlign = 'center'; ctx.fillText('KEEP FINGERS OUT', 128, 34); ctx.font = 'bold 16px Inter, Arial'; ctx.fillText('SHRED-O-MATIC 9000', 128, 56);
+    }) }));
+    label.position.set(0, 0.64, 0.222); sh.add(label);
+    this.shredPaper = box(0.28, 0.1, 0.2, M.matte(0xf2f2f2), [0, 0.92, -0.05], sh); // a stack waiting to be shredded
     sh.position.set(2.6, 0, -1.2);
     this.root.add(sh);
     this.shredder = sh;
     this.colliders.push({ minX: 2.3, maxX: 2.9, minZ: -1.45, maxZ: -0.95 });
     this.register({ id: 'shredder', object: sh, label: 'Shredder', radius: 2 });
 
-    // supply cabinet
-    const cab = pivot(await instance('furniture', 'bookcaseClosedWide'), { x: 1.6, z: ROOM.maxZ - 0.3, rotY: Math.PI });
+    // supply cabinet (main-room back wall, clear of the back-wing doorway)
+    const cab = pivot(await instance('furniture', 'bookcaseClosedWide'), { x: 3.2, z: ROOM.maxZ - 0.3, rotY: Math.PI });
     this.root.add(cab);
     const supLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.2), new THREE.MeshStandardMaterial({ map: canvasTexture(256, 56, (ctx) => {
       ctx.fillStyle = '#fff';
@@ -576,12 +916,13 @@ export class Office {
       ctx.fillStyle = '#c00';
       ctx.font = 'bold 26px Inter, Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('SUPPLIES 🎧', 128, 38);
+      ctx.fillText('SUPPLIES', 112, 38);
+      drawIcon(ctx, 'headphones', 178, 12, 30, '#c00', 2.6);
     }) }));
-    supLabel.position.set(1.6, 1.75, ROOM.maxZ - 0.52);
+    supLabel.position.set(3.2, 1.75, ROOM.maxZ - 0.52);
     supLabel.rotation.y = Math.PI;
     this.root.add(supLabel);
-    this.colliders.push({ minX: 0.8, maxX: 2.4, minZ: ROOM.maxZ - 0.6, maxZ: ROOM.maxZ });
+    this.colliders.push({ minX: 2.4, maxX: 4.0, minZ: ROOM.maxZ - 0.6, maxZ: ROOM.maxZ });
     this.register({ id: 'supplies', object: cab, label: 'Supply cabinet', radius: 2.2 });
 
     // water cooler
@@ -599,36 +940,44 @@ export class Office {
     box(0.4, 0.02, 0.3, M.matte(0xffffff), [1.9, 0.98, 1.0], this.root);
     this.colliders.push({ minX: 1.4, maxX: 2.4, minZ: 0.1, maxZ: 1.9 });
 
-    // lounge corner
-    this.root.add(pivot(await instance('furniture', 'loungeSofa'), { x: 7.3, z: 5.4, rotY: Math.PI }));
-    this.root.add(pivot(await instance('furniture', 'tableCoffee'), { x: 7.3, z: 4.4 }));
+    // a coat rack by the back-wing doorway (the lounge now lives in the break room)
     this.root.add(pivot(await instance('furniture', 'coatRackStanding'), { x: 8.5, z: 1.9 }));
-    this.colliders.push({ minX: 6.2, maxX: 8.4, minZ: 3.9, maxZ: 6 });
 
-    for (const [x, z] of [[-8.5, -5.5], [2.9, 5.5], [8.5, -0.9], [-8.5, 5.7]]) this.root.add(pivot(await instance('furniture', 'pottedPlant'), { x, z }));
-    for (const [x, z] of [[0.6, -2.6], [-7.8, 0.6], [0.6, 3.6]]) this.root.add(pivot(await instance('furniture', 'trashcan'), { x, z }));
-    for (const [x, z, r] of [[4.2, 5.4, 0.3], [4.7, 5.6, -0.2], [4.4, 4.9, 0.8]]) this.root.add(pivot(await instance('furniture', pick(['cardboardBoxClosed', 'cardboardBoxOpen'])), { x, z, rotY: r }));
-    this.colliders.push({ minX: 3.9, maxX: 5.0, minZ: 4.6, maxZ: 6 });
+    for (const [x, z] of [[-8.5, -5.5], [5.2, 2.2], [8.5, -0.9], [-8.5, 5.7]]) this.root.add(pivot(await instance('furniture', 'pottedPlant'), { x, z }));
+    for (const [x, z] of [[0.6, -2.6], [-7.8, 0.6], [4.3, 5.6]]) this.root.add(pivot(await instance('furniture', 'trashcan'), { x, z }));
+    for (const [x, z, r] of [[-6.0, 5.5, 0.3], [-6.5, 5.6, -0.2], [-6.2, 4.9, 0.8]]) this.root.add(pivot(await instance('furniture', pick(['cardboardBoxClosed', 'cardboardBoxOpen'])), { x, z, rotY: r }));
+    this.colliders.push({ minX: -6.8, maxX: -5.7, minZ: 4.6, maxZ: 6 });
 
     // ceiling fans on downrods
     const rodMat = M.metal(0xe8e8e0, 0.3);
-    for (const [x, z] of [[-7.0, -1.6], [-3.6, -1.6], [-0.2, -1.6], [-7.0, 1.2], [-3.6, 1.2], [-0.2, 1.2], [5.2, -3.3]]) {
-      const y = ROOM.height - 0.62;
-      const fan = pivot(await instance('furniture', 'ceilingFan', { scale: 2.6 }), { x, y, z });
+    // Kenney's fan has its hub at the model origin (its bounding box is lopsided because
+    // of the blade angles), so we spin it around the origin — centring the bbox made the
+    // fans wobble around an off-axis point.
+    const FAN_SCALE = 2.6;
+    const hubTop = ROOM.height - 0.32; // where the rod meets the motor housing
+    for (const [x, z] of [[-5.6, -1.6], [-1.6, -1.6], [-5.6, 1.2], [-1.6, 1.2], [5.6, -3.4]]) {
+      const fan = new THREE.Group();
+      const model = await instance('furniture', 'ceilingFan', { scale: FAN_SCALE });
+      fan.add(model);
+      fan.position.set(x, hubTop, z);
+      fan.rotation.y = Math.random() * Math.PI * 2;
       this.root.add(fan);
       this.fans.push(fan);
-      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.3, 8), rodMat);
-      rod.position.set(x, ROOM.height - 0.15, z);
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, ROOM.height - hubTop + 0.01, 10), rodMat);
+      rod.position.set(x, (ROOM.height + hubTop) / 2, z);
       this.root.add(rod);
+      const canopy = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, 0.05, 16), rodMat);
+      canopy.position.set(x, ROOM.height - 0.025, z);
+      this.root.add(canopy);
     }
 
     // posters
     const posters = [
-      { title: 'SMILE AND DIAL', sub: 'They can hear your smile', emoji: '😁', bg: '#1f9d4c' },
-      { title: 'QUOTA IS LIFE', sub: '— Mr. Chatterjee', emoji: '💰', bg: '#b3261e' },
-      { title: 'GIFT CARDS ARE FOREVER', sub: 'Google Play • iTunes • Steam', emoji: '🎁', bg: '#2a4d9b' },
-      { title: 'NEVER SAY "SCAM"', sub: 'Say "service"', emoji: '🤫', bg: '#6a1b9a' },
-      { title: 'EMPLOYEE OF THE MONTH', sub: 'Rajesh (the koi fish)', emoji: '🐟', bg: '#c77700' },
+      { title: 'SMILE AND DIAL', sub: 'They can hear your smile', icon: 'smile', bg: '#1f9d4c' },
+      { title: 'QUOTA IS LIFE', sub: '— Mr. Chatterjee', icon: 'money', bg: '#b3261e' },
+      { title: 'GIFT CARDS ARE FOREVER', sub: 'Google Play • iTunes • Steam', icon: 'gift', bg: '#2a4d9b' },
+      { title: 'NEVER SAY "SCAM"', sub: 'Say "service"', icon: 'hidden', bg: '#6a1b9a' },
+      { title: 'EMPLOYEE OF THE MONTH', sub: 'Rajesh (the koi fish)', icon: 'fish', bg: '#c77700' },
     ];
     const spots = [
       { x: -2.5, y: 1.65, z: ROOM.maxZ - 0.06, r: Math.PI },
@@ -729,7 +1078,7 @@ export class Office {
     // stacks of files tied with red string on the bookcase & floor (bureaucracy!)
     const fileMat = M.matte(0xd9c9a0);
     const tape = M.matte(0xb3261e);
-    for (const [x, z, n] of [[4.0, -5.6, 5], [8.6, -5.6, 7], [0.5, 5.6, 4]]) {
+    for (const [x, z, n] of [[4.0, -5.6, 5], [8.6, -5.6, 7], [6.8, 5.6, 4]]) {
       for (let i = 0; i < n; i++) {
         box(0.32, 0.05, 0.24, fileMat, [x + (Math.random() - 0.5) * 0.04, 0.025 + i * 0.05, z + (Math.random() - 0.5) * 0.04], this.root);
       }
@@ -775,9 +1124,11 @@ export class Office {
 
   async buildCharacters() {
     const names = [...CHARACTERS.coworkers];
-    const seatOrder = [0, 2, 3, 5, 6, 8, 10, 12, 13].map((i) => this.seats[i]).filter(Boolean);
+    const deskNames = ['Raju', 'Priya', 'Vikram', 'Anjali']; // match the Messenger contacts
+    // seats: 0-4 front row, 5-9 middle row, 10-13 back row (yours is between 12 and 13)
+    const seatOrder = [1, 4, 6, 10].map((i) => this.seats[i]).filter(Boolean);
     const lines = ['Hello sir, I am calling from Windoze.', "Please do the needful ma'am.", 'Your computer is having virus!', 'Google Play card sir, Google Play!', 'Yes yes, I am Kevin from Texas.', 'Sir do not hang up sir!', 'Madam please open the black window.'];
-    for (let i = 0; i < Math.min(8, seatOrder.length); i++) {
+    for (let i = 0; i < Math.min(COWORKER_COUNT, seatOrder.length); i++) {
       const seat = seatOrder[i];
       const npc = await NPC.create('characters', names[i % names.length]);
       npc.root.position.set(seat.x, 0.32, seat.z - 0.08);
@@ -785,6 +1136,7 @@ export class Office {
       npc.play('sit');
       npc.seat = seat;
       npc.lines = lines;
+      npc.label = deskNames[i % deskNames.length];
       npc.chatter = 3 + Math.random() * 10;
       this.root.add(npc.root);
       this.coworkers.push(npc);
@@ -793,8 +1145,23 @@ export class Office {
     this.boss = await NPC.create('characters', CHARACTERS.boss);
     this.boss.root.position.copy(this.bossSpot);
     this.boss.root.rotation.y = Math.PI * 0.85;
+    this.boss.label = 'the boss';
     this.root.add(this.boss.root);
     this.npcs.push(this.boss);
+    this.register({ id: 'boss', object: this.boss.root, label: 'Talk to Mr. Chatterjee (negotiate)', radius: 2.4 });
+  }
+
+  /** Mr. Chatterjee glares at you: when he's standing idle he turns to face the player. */
+  bossFace(playerPos, dt) {
+    const b = this.boss;
+    if (!b || this.bossBusy || b.path.length || b.reactT > 0) return;
+    const p = b.root.position;
+    const dx = playerPos.x - p.x, dz = playerPos.z - p.z;
+    if (dx * dx + dz * dz > 81) return; // only when you're within ~9m
+    const want = Math.atan2(dx, dz);
+    let diff = want - b.root.rotation.y;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    b.root.rotation.y += diff * Math.min(1, dt * 3.5);
   }
 
   // ------------------------------------------------------------------ helpers
@@ -816,6 +1183,15 @@ export class Office {
 
   getInteractable(id) {
     return this.interactables.find((i) => i.id === id);
+  }
+
+  /** 'break' | 'restroom' | null for a world position — used to silence the phone. */
+  zoneAt(pos) {
+    if (!pos) return null;
+    for (const z of this.noCallZones) {
+      if (pos.x >= z.minX && pos.x <= z.maxX && pos.z >= z.minZ && pos.z <= z.maxZ) return z.kind;
+    }
+    return null;
   }
 
   highlight(entry, on) {
@@ -851,7 +1227,7 @@ export class Office {
   setPower(on) {
     this.powered = on;
     this.rig.setPower(on);
-    this.diffuserMat.emissiveIntensity = on ? 1.6 : 0;
+    this.diffuserMat.emissiveIntensity = on ? 1.15 : 0;
     this.ceilMat.emissiveIntensity = on ? 1 : 0.08;
     this.boardMesh.visible = on;
     for (const tex of this.coworkerScreens) tex.userData.redraw((ctx, w, h) => drawScreen(ctx, w, h, { kind: on ? 'coworker' : 'off' }));
@@ -883,6 +1259,7 @@ export class Office {
     for (let i = 0; i < count; i++) {
       const cop = await NPC.create('characters', CHARACTERS.police);
       cop.root.position.set(ROOM.maxX + 1.2 + i * 0.8, 0, 3);
+      cop.label = 'the cop';
       this.root.add(cop.root);
       this.npcs.push(cop);
       officers.push(cop);
@@ -911,6 +1288,7 @@ export class Office {
   async spawnCow() {
     const cow = await NPC.create('animals', 'animal-cow', { scale: 0.95 });
     cow.root.position.set(ROOM.maxX + 1.5, 0, 3);
+    cow.label = 'the office cow';
     this.root.add(cow.root);
     this.npcs.push(cow);
     cow.walk([[ROOM.maxX - 1, 3], [1.0, 3.6], [-0.9, 4.5]], { speed: 1.1, onArrive: (n) => n.play('eat') });
@@ -937,14 +1315,16 @@ export class Office {
   // ------------------------------------------------------------------ per-frame
   update(dt) {
     this.time += dt;
-    const fanSpeed = this.powered ? 6 : 0.3;
-    for (const f of this.fans) f.rotation.y += dt * fanSpeed;
+    const want = this.powered ? 4.2 : 0;
+    this.fanSpeed = (this.fanSpeed ?? want) + (want - (this.fanSpeed ?? want)) * Math.min(1, dt * 0.6);
+    for (const f of this.fans) f.rotation.y += dt * this.fanSpeed;
     for (const n of this.npcs) n.update(dt);
+    this.updateTraffic(dt);
     for (const c of this.coworkers) {
       c.chatter -= dt;
       if (c.chatter <= 0 && this.powered) {
-        c.chatter = 8 + Math.random() * 18;
-        if (Math.random() < 0.55) c.say(pick(c.lines), 3.5);
+        c.chatter = 14 + Math.random() * 22;
+        if (Math.random() < 0.4) c.say(pick(c.lines), 3.5);
       }
       if (c.head) c.head.rotation.y = Math.sin(this.time * 0.7 + c.seat.slot) * 0.25;
     }

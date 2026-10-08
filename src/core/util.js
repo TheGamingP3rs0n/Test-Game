@@ -12,6 +12,24 @@ for (const method of ['append', 'prepend', 'replaceChildren']) {
   Element.prototype[method] = safe;
 }
 
+// Text/HTML renderers, installed by ui/icons.js: they swap any emoji for an SVG icon so
+// the UI never shows emoji (mods and AI replies included).
+let textRenderer = (s) => [s];
+let htmlRenderer = (s) => s;
+export function setTextRenderers(text, html) {
+  textRenderer = text;
+  htmlRenderer = html;
+}
+export const renderText = (s) => textRenderer(String(s));
+const EMOJI_ATTR = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:\uFE0F|\u200D\p{Extended_Pictographic})*\uFE0F?\s?/gu;
+
+/** Replace a node's text (emoji become icons). */
+export function setText(node, text) {
+  if (!node) return;
+  node.replaceChildren(...textRenderer(String(text ?? '')));
+}
+export const renderHTML = (s) => htmlRenderer(String(s));
+
 /**
  * Create an element: el('div.card#id', { onclick, style: {...}, dataset: {...} }, ...children)
  */
@@ -28,15 +46,15 @@ export function el(spec, props = {}, ...children) {
   }
   for (const [k, v] of Object.entries(props || {})) {
     if (v === undefined || v === null || v === false) continue;
-    if (k === 'style' && typeof v === 'object') Object.assign(node.style, v);
+    if (k === 'style' && typeof v === 'object') { for (const [sk, sv] of Object.entries(v)) { if (sk.startsWith('--')) node.style.setProperty(sk, sv); else node.style[sk] = sv; } }
     else if (k === 'dataset') Object.assign(node.dataset, v);
     else if (k === 'class') node.className += (node.className ? ' ' : '') + v;
-    else if (k === 'html') node.innerHTML = v;
-    else if (k === 'text') node.textContent = v;
+    else if (k === 'html') node.innerHTML = htmlRenderer(v);
+    else if (k === 'text') node.append(...textRenderer(String(v)));
     else if (k === 'value' || k === 'checked' || k === 'selected') node[k] = v;
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2).toLowerCase(), v);
     else if (k in node && typeof v !== 'string') node[k] = v;
-    else node.setAttribute(k, v === true ? '' : v);
+    else node.setAttribute(k, v === true ? '' : typeof v === 'string' ? v.replace(EMOJI_ATTR, '') : v);
   }
   appendChildren(node, children);
   return node;
@@ -45,7 +63,8 @@ export function el(spec, props = {}, ...children) {
 function appendChildren(node, children) {
   for (const c of children.flat(Infinity)) {
     if (c === null || c === undefined || c === false) continue;
-    node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    if (c instanceof Node) node.append(c);
+    else for (const part of textRenderer(String(c))) node.append(part instanceof Node ? part : document.createTextNode(part));
   }
 }
 

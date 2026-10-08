@@ -26,13 +26,27 @@ export class Player {
     this.dragging = false;
     this.locked = false;
     this.hidden = false;
+    this.stamina = 100;
+    this.jumpOff = 0;
+    this.jumpVel = 0;
+    this.zone = null; // current no-call zone: 'break' | 'restroom' | null
+    this.seatExit = null;
     this.bindInput();
   }
 
   bindInput() {
     document.addEventListener('pointerlockchange', () => {
+      const was = this.locked;
       this.locked = document.pointerLockElement === this.canvas;
-      bus.emit('player:lock', this.locked);
+      // Lost the lock without us asking = the browser ate an Esc press (it always
+      // releases the mouse on Esc). The game treats that as "pause".
+      const intentional = this.releasing;
+      this.releasing = false;
+      bus.emit('player:lock', this.locked, { lost: was && !this.locked && !intentional });
+    });
+    document.addEventListener('pointerlockerror', () => {
+      this.releasing = false;
+      bus.emit('player:lock', false, { error: true });
     });
     document.addEventListener('mousemove', (e) => {
       if (!this.enabled) return;
@@ -51,7 +65,8 @@ export class Player {
         this.requestLock();
         if (!this.locked) this.dragging = true; // fallback when pointer lock is unavailable
       } else if (e.button === 0 && this.locked) {
-        this.interact();
+        if (this.target || this.holding === 'extinguisher') this.interact();
+        else bus.emit('player:fire'); // nothing to interact with — swing a held Scamazon tool
       }
     });
     document.addEventListener('mouseup', () => (this.dragging = false));
@@ -61,22 +76,35 @@ export class Player {
       if (!this.enabled) return;
       if (e.code === 'KeyE') this.interact();
       if (e.code === 'KeyC') this.toggleCrouch();
+      if (e.code === 'KeyF' && this.mode !== 'seated') bus.emit('player:fire');
+      if (e.code === 'Space') { e.preventDefault(); this.jump(); }
     });
     document.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
   }
 
   requestLock() {
+    if (document.pointerLockElement === this.canvas) return;
     try {
-      const p = this.canvas.requestPointerLock?.();
-      p?.catch?.(() => {});
+      // unadjustedMovement = raw mouse input (no OS acceleration) where supported
+      const p = this.canvas.requestPointerLock?.({ unadjustedMovement: true });
+      p?.catch?.(() => {
+        try {
+          this.canvas.requestPointerLock?.()?.catch?.(() => {});
+        } catch {
+          /* drag-to-look fallback */
+        }
+      });
     } catch {
       /* not supported (e.g. headless) — drag-to-look fallback */
     }
   }
 
   releaseLock() {
-    if (document.pointerLockElement) document.exitPointerLock();
+    if (document.pointerLockElement) {
+      this.releasing = true;
+      document.exitPointerLock();
+    }
   }
 
   setEnabled(on) {
@@ -96,15 +124,41 @@ export class Player {
     this.pitch = -0.12;
     this.mode = 'seated';
     this.hidden = false;
+    this.seatExit = new THREE.Vector3(0, 0, 0.4); // stand up backward, away from the desk
+    bus.emit('player:mode', this.mode);
+  }
+
+  /** Sit on a break-room seat (or a toilet). yaw is the facing while seated. */
+  sitAt(pos, yaw) {
+    this.pos.set(pos.x, 0, pos.z);
+    this.seatYaw = yaw;
+    this.yaw = yaw;
+    this.pitch = -0.05;
+    this.mode = 'seated';
+    this.hidden = false;
+    // step forward (where we're facing — placed to be open floor) when standing up
+    this.seatExit = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)).multiplyScalar(0.55);
     bus.emit('player:mode', this.mode);
   }
 
   standUp() {
     if (this.mode === 'standing') return;
-    if (this.mode === 'seated') this.pos.z += 0.35;
+    if (this.mode === 'seated') {
+      const exit = this.seatExit || new THREE.Vector3(0, 0, 0.35);
+      const t = this.pos.clone().add(exit);
+      if (!this.collide(t)) this.pos.copy(t);
+      else { const alt = this.pos.clone().add(new THREE.Vector3(0, 0, 0.35)); if (!this.collide(alt)) this.pos.copy(alt); }
+    }
     this.mode = 'standing';
     this.hidden = false;
+    this.seatExit = null;
     bus.emit('player:mode', this.mode);
+  }
+
+  jump() {
+    if (!this.enabled || this.mode === 'crouch' || this.jumpOff > 0.001) return;
+    if (this.mode === 'seated') this.standUp();
+    this.jumpVel = 3.6;
   }
 
   toggleCrouch() {
@@ -156,10 +210,15 @@ export class Player {
       if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) move.z += 1;
       if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) move.x -= 1;
       if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) move.x += 1;
-      if (move.lengthSq() > 0) {
+      const moving = move.lengthSq() > 0;
+      const wantSprint = moving && (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) && this.mode !== 'crouch' && this.stamina > 2;
+      // stamina drains while sprinting, regenerates otherwise
+      this.stamina = clamp(this.stamina + (wantSprint ? -32 : 18) * dt, 0, 100);
+      this.sprinting = wantSprint;
+      if (moving) {
         if (this.mode === 'seated') this.standUp();
         move.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
-        const speed = (this.mode === 'crouch' ? 1.4 : this.keys.has('ShiftLeft') ? 5 : 3) * dt;
+        const speed = (this.mode === 'crouch' ? 1.4 : wantSprint ? 5.2 : 3) * dt;
         const nx = this.pos.clone().add(new THREE.Vector3(move.x * speed, 0, 0));
         if (!this.collide(nx)) this.pos.x = nx.x;
         const nz = this.pos.clone().add(new THREE.Vector3(0, 0, move.z * speed));
@@ -174,12 +233,22 @@ export class Player {
         }
       }
     }
+    // jump arc (the camera is a floating eye; apply a simple ballistic offset)
+    if (this.jumpVel !== 0 || this.jumpOff > 0) {
+      this.jumpVel -= 11 * dt;
+      this.jumpOff = Math.max(0, this.jumpOff + this.jumpVel * dt);
+      if (this.jumpOff === 0) this.jumpVel = 0;
+    }
     const wantEye = EYE[this.mode];
     this.eye += (wantEye - this.eye) * Math.min(1, dt * 8);
-    this.camera.position.set(this.pos.x, this.eye, this.pos.z);
+    this.camera.position.set(this.pos.x, this.eye + this.jumpOff, this.pos.z);
     this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
 
-    if (this.enabled) this.updateTarget();
+    if (this.enabled) {
+      this.updateTarget();
+      const zone = this.office.zoneAt(this.pos);
+      if (zone !== this.zone) { this.zone = zone; bus.emit('player:zone', zone); }
+    }
   }
 
   updateTarget() {

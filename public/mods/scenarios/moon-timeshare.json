@@ -1,0 +1,27 @@
+{
+  "id": "moon-timeshare",
+  "name": "Lunar Timeshare Opportunity",
+  "impersonate": "Senior Sales Astronaut at MoonVista Resorts",
+  "leadSource": "Pop-up: 'You've been pre-approved for a timeshare ON THE MOON!'",
+  "callerContext": "A pop-up said you were pre-approved for a luxury timeshare on the Moon. It sounded ridiculous, but there was a picture of a pool.",
+  "unlockDay": 1,
+  "payout": 1.3,
+  "icon": "\ud83d\ude80",
+  "playbook": [
+    "Be absurdly enthusiastic about the Moon.",
+    "Describe the 'low-gravity pool' in loving detail.",
+    "Explain the small 'launch reservation deposit'.",
+    "Invent a new 'oxygen fee' whenever they hesitate."
+  ],
+  "keywords": [
+    "moon",
+    "timeshare",
+    "resort",
+    "space",
+    "rocket",
+    "deposit",
+    "astronaut",
+    "pool"
+  ],
+  "scamApp": "giftcards"
+}

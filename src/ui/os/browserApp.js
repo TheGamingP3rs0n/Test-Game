@@ -6,34 +6,54 @@ import { upgradeLevel } from '../../game/progression.js';
 import { addIntel } from './apps.js';
 import { renderSite } from './remoteApp.js';
 import { COWORKERS } from '../../ai/coworkers.js';
+import { icon, iconFor } from '../icons.js';
 
 const BOOKMARKS = [
-  ['🔎', 'searchy.com'],
-  ['🕵️', 'whodat.com'],
-  ['🎁', 'giftcheck.biz'],
-  ['📚', 'scamwiki.org'],
-  ['📰', 'kolkatatimes.in'],
-  ['🏢', 'intranet.globalsolutions'],
+  ['🔎', 'searchy.com', 'Searchy'],
+  ['🕵️', 'whodat.com', 'WhoDat'],
+  ['🎁', 'giftcheck.biz', 'GiftCheck'],
+  ['📚', 'scamwiki.org', 'ScamWiki'],
+  ['📰', 'kolkatatimes.in', 'Kolkata Times'],
+  ['🏢', 'intranet.globalsolutions', 'Intranet'],
 ];
 
 export function browserApp(game, win, opts = {}) {
   const page = el('div.page');
-  const addr = el('input.addr', { onkeydown: (e) => (e.stopPropagation(), e.key === 'Enter' && go(addr.value)) });
-  const go = (url) => {
+  const history = [];
+  let hIdx = -1;
+  const tabTitle = el('span.br-tabtitle', 'New Tab');
+  const tabFav = el('span.br-fav', icon('globe'));
+  const lock = el('span.br-lock', icon('lock'));
+  const addr = el('input.addr.br-addr', { spellcheck: false, onkeydown: (e) => (e.stopPropagation(), e.key === 'Enter' && go(addr.value)) });
+  const back = el('button.br-nav', { title: 'Back', onclick: () => hIdx > 0 && go(history[--hIdx], true) }, icon('arrow-left'));
+  const fwd = el('button.br-nav', { title: 'Forward', onclick: () => hIdx < history.length - 1 && go(history[++hIdx], true) }, icon('arrow-right'));
+  const go = (url, fromHistory = false) => {
     url = String(url || 'searchy.com').trim().toLowerCase().replace(/^https?:\/\//, '');
     addr.value = url;
+    if (!fromHistory) { history.splice(hIdx + 1); history.push(url); hIdx = history.length - 1; }
+    back.disabled = hIdx <= 0; fwd.disabled = hIdx >= history.length - 1;
+    const bm = BOOKMARKS.find(([, d]) => url.startsWith(d));
+    tabTitle.textContent = bm ? bm[2] : url.split('/')[0];
+    tabFav.replaceChildren(icon(bm ? iconFor(bm[0], 'globe') : 'globe'));
+    lock.classList.toggle('insecure', !bm && !(game.run.sites || []).some((x) => url.includes(x.domain.toLowerCase())));
+    page.scrollTop = 0;
     if (game.internetDown) {
-      page.replaceChildren(el('div.pad', { style: { textAlign: 'center', paddingTop: '60px' } }, el('div', { style: { fontSize: '60px' } }, '🦖'), el('h2', 'No internet'), el('p', 'Try: rebooting the router (side table, west wall).')));
+      tabTitle.textContent = 'No internet';
+      page.replaceChildren(el('div.br-offline', icon('wifi-off'), el('h2', 'No internet'), el('p', 'Try: rebooting the router (side table, west wall).'), el('p.muted', 'ERR_ROUTER_HELD_TOGETHER_BY_TAPE')));
       return;
     }
     const site = SITES.find(([d]) => url.startsWith(d));
     if (site) return page.replaceChildren(site[1](game, go));
-    const custom = (game.run.sites || []).find((s) => url.includes(s.domain.toLowerCase()));
+    const custom = (game.run.sites || []).find((x) => url.includes(x.domain.toLowerCase()));
     if (custom) return page.replaceChildren(renderSite(custom));
-    page.replaceChildren(el('div.pad', el('h2', 'Server not found'), el('p', `We can't find ${url}.`)));
+    page.replaceChildren(el('div.br-offline', icon('globe'), el('h2', 'This site can\'t be reached'), el('p', `${url}'s server IP address could not be found.`), el('p.muted', 'DNS_PROBE_FINISHED_NXDOMAIN')));
   };
-  const root = el('div.browser',
-    el('div.app-toolbar', ...BOOKMARKS.map(([i, d]) => el('button.xp-btn', { title: d, onclick: () => go(d) }, i)), addr, el('button.xp-btn', { onclick: () => go(addr.value) }, 'Go')),
+  const root = el('div.browser.br',
+    el('div.br-tabs', el('div.br-tab', tabFav, tabTitle, el('span.br-x', icon('x'))), el('span.br-newtab', icon('plus'))),
+    el('div.br-toolbar', back, fwd, el('button.br-nav', { title: 'Reload', onclick: () => go(addr.value, true) }, icon('refresh')),
+      el('div.br-omni', lock, addr, el('span.br-star', icon('star'))),
+      el('button.br-nav', { title: 'Home', onclick: () => go('searchy.com') }, icon('home'))),
+    el('div.br-bookmarks', ...BOOKMARKS.map(([i, d, n]) => el('button.br-bm', { title: d, onclick: () => go(d) }, icon(iconFor(i, 'globe')), n))),
     page);
   setTimeout(() => go(opts.url || 'searchy.com'), 0);
   return root;
@@ -74,12 +94,13 @@ const SITES = [
     const out = el('div');
     const input = el('input', { placeholder: 'XXXX-XXXX-XXXX', style: { width: '220px', fontFamily: 'var(--mono)', fontSize: '18px' }, onkeydown: (e) => e.stopPropagation() });
     const check = () => {
-      const code = input.value.trim().toUpperCase();
-      const pay = (game.day?.pendingPayments || []).find((p) => p.cards?.some((c) => c.code === code));
+      const norm = (v) => String(v).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const code = norm(input.value);
+      const pay = (game.day?.pendingPayments || []).find((p) => p.code && norm(p.code) === code);
       if (!pay) return out.replaceChildren(el('p', '❓ Unknown code.'));
       out.replaceChildren(pay.fake ? el('p', { style: { color: '#c62828', fontWeight: 800 } }, '🚫 INVALID — this code was never activated. Someone is messing with you…') : el('p', { style: { color: '#137a43', fontWeight: 800 } }, '✅ Valid and unredeemed.'));
     };
-    const pending = (game.day?.pendingPayments || []).filter((p) => p.cards).flatMap((p) => p.cards.filter((c) => c.status === 'pending').map((c) => c.code));
+    const pending = (game.day?.pendingPayments || []).filter((p) => p.status === 'pending' && p.code).map((p) => p.code);
     return el('div.site', el('header', { style: { background: '#d81b60' } }, el('h1', '🎁 GiftCheck — card balance checker')), el('div.body', el('p', 'Check a gift card before redeeming it. Scambaiters love fake codes.'), el('div.row', input, el('button.xp-btn.primary', { onclick: check }, 'Check')), pending.length ? el('p', { style: { fontSize: '12px', color: '#666' } }, 'Codes waiting in your Cashier: ', ...pending.map((c) => el('a', { href: '#', style: { marginRight: '8px' }, onclick: (e) => (e.preventDefault(), (input.value = c), check()) }, c))) : null, out));
   }],
 

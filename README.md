@@ -14,7 +14,27 @@ Built with **Vite + three.js**, voiced and powered by **Groq**. Runs on `localho
 | ![Your desk](docs/screenshots/desk.jpg) | ![The office](docs/screenshots/office.jpg) |
 | ![Remote access to a victim's PC](docs/screenshots/remote-access.jpg) | ![Boss performance review](docs/screenshots/boss-review.jpg) |
 
-## Quick start
+## Download (desktop app)
+
+Grab the latest build from the [Releases page](https://github.com/TheGamingP3rs0n/Test-Game/releases)
+— every past version stays downloadable there too:
+
+| Platform | File |
+| --- | --- |
+| Windows | `ScamCallCenter-x.y.z-Portable.exe` (just run it) or `ScamCallCenter-x.y.z-Setup.exe` (installer) |
+| macOS | `ScamCallCenter-x.y.z-mac-universal.dmg` (Intel + Apple Silicon). The build is unsigned: right-click the app → **Open** the first time. |
+| Linux | `ScamCallCenter-x.y.z-linux-x86_64.AppImage` (`chmod +x` then run) or the `.tar.gz` |
+
+The desktop app hosts LAN games with one click (no extra server window) and supports
+fullscreen with **F11**. Your saves and settings live inside the app.
+
+To publish a new version: bump `version` in `package.json` and `VERSION` in
+`src/core/store.js`, then push a tag like `v0.4.0`. GitHub Actions builds Windows, macOS
+and Linux and attaches them to a new release. Build locally with `npm run dist:win`,
+`npm run dist:mac` or `npm run dist:linux` (output in `release/`), or run the app from
+source with `npm run app`.
+
+## Play in the browser (from source)
 
 Requires **Node.js 18+**.
 
@@ -45,6 +65,28 @@ localStorage and only sent to `api.groq.com`.
 
 *If voices fail with a "terms" error, open the Groq console playground, pick the Orpheus model
 once and accept its terms.*
+
+## Multiplayer (online or LAN)
+
+**Online (anywhere):** choose **Multiplayer → Host online**, optionally set a password,
+and send your friends the 6-letter **join code**. They choose **Join with a code** and
+enter it (plus the password). The host's game must stay open — it runs the lobby. Games
+connect peer-to-peer (PeerJS); it needs an internet connection.
+
+**Same Wi-Fi (LAN):** in the desktop app, **Host on this network** starts the server
+inside the game and shows your address. From source, use the steps below.
+
+**Host:** run `npm run host` (or double-click *Host Multiplayer*). It serves the game on
+your network and starts the co-op server, then prints your address, e.g. `192.168.1.5`.
+Open the game it points to, choose **Multiplayer → Host → Connect**.
+
+**Join:** open the host's game link in your browser, choose **Multiplayer → Join**, enter
+your name and the host's address (e.g. `192.168.1.5`), and connect.
+
+In the lobby everyone picks a name (shown on a floating nametag above their character).
+Anyone can **Start shift**. Your scams pool into a shared **team quota**; when it's met,
+hit **Clock Out** to call a vote — once enough of the team agrees, everyone advances to the
+next (harder) day.
 
 ## How to play
 

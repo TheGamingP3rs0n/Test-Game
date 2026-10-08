@@ -1,6 +1,7 @@
 // Canvas-drawn textures: floor tiles, posters, the live quota TV, monitor screens,
 // the city outside the windows. Drawn at runtime so they can update live.
 import * as THREE from 'three';
+import { drawIcon, stripEmoji } from '../ui/icons.js';
 
 export function canvasTexture(w, h, draw, { repeat = null, srgb = true } = {}) {
   const canvas = document.createElement('canvas');
@@ -85,7 +86,7 @@ export function wallTexture(color = '#d9cfa8') {
   }, { repeat: [4, 1] });
 }
 
-export function posterTexture({ title, sub = '', bg = '#1f9d4c', fg = '#ffe14d', emoji = '' }) {
+export function posterTexture({ title, sub = '', bg = '#1f9d4c', fg = '#ffe14d', icon = '' }) {
   return canvasTexture(256, 360, (ctx, w, h) => {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
@@ -93,13 +94,10 @@ export function posterTexture({ title, sub = '', bg = '#1f9d4c', fg = '#ffe14d',
     ctx.lineWidth = 8;
     ctx.strokeRect(10, 10, w - 20, h - 20);
     ctx.textAlign = 'center';
-    if (emoji) {
-      ctx.font = '96px serif';
-      ctx.fillText(emoji, w / 2, 150);
-    }
+    if (icon) drawIcon(ctx, icon, w / 2 - 48, 52, 96, fg, 2.2);
     ctx.fillStyle = fg;
     ctx.font = 'bold 34px "Bungee", Impact, sans-serif';
-    wrapText(ctx, title, w / 2, emoji ? 215 : 120, w - 40, 38);
+    wrapText(ctx, title, w / 2, icon ? 205 : 120, w - 40, 38);
     ctx.font = 'bold 18px Inter, Arial, sans-serif';
     ctx.fillStyle = '#fff';
     wrapText(ctx, sub, w / 2, h - 60, w - 40, 22);
@@ -167,49 +165,92 @@ export function drawQuotaBoard(ctx, w, h, { day = 1, time = '9:00 AM', earned = 
   }
 }
 
-/** Monitor screen for the player's PC (and coworker monitors). */
+/** Monitor screen for the player's PC (and coworker monitors). Matches the panel's 1.64:1 shape. */
 export function screenTexture(kind = 'desktop') {
-  return canvasTexture(256, 192, (ctx, w, h) => drawScreen(ctx, w, h, { kind }));
+  return canvasTexture(512, 312, (ctx, w, h) => drawScreen(ctx, w, h, { kind }));
 }
 
-export function drawScreen(ctx, w, h, { kind = 'desktop', text = '', trust = null }) {
+export function drawScreen(ctx, w, h, { kind = 'desktop', text = '', trust = null, ringing = false }) {
+  ctx.textAlign = 'left';
   if (kind === 'off') {
-    ctx.fillStyle = '#050505';
+    ctx.fillStyle = '#040505';
     ctx.fillRect(0, 0, w, h);
     return;
   }
   if (kind === 'virus') {
-    ctx.fillStyle = '#300';
+    ctx.fillStyle = '#2a0000';
     ctx.fillRect(0, 0, w, h);
-    ctx.font = '80px serif';
     ctx.textAlign = 'center';
-    ctx.fillText('☠️', w / 2, 110);
-    ctx.fillStyle = '#f33';
-    ctx.font = 'bold 22px monospace';
-    ctx.fillText('YOU GOT HACKED', w / 2, 160);
+    drawIcon(ctx, 'skull', w / 2 - h * 0.2, h * 0.1, h * 0.4, '#ff3b3b', 2);
+    ctx.fillStyle = '#ff4545';
+    ctx.font = `bold ${Math.round(h * 0.11)}px "VT323", monospace`;
+    ctx.fillText('YOUR FILES ARE ENCRYPTED', w / 2, h * 0.72);
+    ctx.font = `${Math.round(h * 0.07)}px "VT323", monospace`;
+    ctx.fillText('send 0.5 BTC to unlock', w / 2, h * 0.84);
     return;
   }
-  const grd = ctx.createLinearGradient(0, 0, w, h);
-  grd.addColorStop(0, kind === 'coworker' ? '#16324f' : '#0f5132');
-  grd.addColorStop(1, kind === 'coworker' ? '#2b5f8a' : '#1f9d4c');
+  const coworker = kind === 'coworker';
+  // wallpaper (same look as the in-game Windoze XD desktop)
+  const grd = ctx.createRadialGradient(w * 0.7, h * 0.3, 10, w * 0.6, h * 0.5, w * 0.8);
+  grd.addColorStop(0, coworker ? '#3a7bd5' : '#39b26b');
+  grd.addColorStop(0.5, coworker ? '#1e4f8f' : '#137a43');
+  grd.addColorStop(1, coworker ? '#0f2c52' : '#0b4d2b');
   ctx.fillStyle = grd;
   ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  for (let i = 0; i < 4; i++) ctx.fillRect(10, 12 + i * 34, 22, 22);
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(0, h - 18, w, 18);
-  if (text) {
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(50, 40, w - 70, 90);
-    ctx.fillStyle = '#ffe14d';
-    ctx.font = 'bold 16px Inter, Arial';
+  // desktop icons
+  const s = h / 312;
+  const icons = ['phone', 'monitor', 'notes', 'globe', 'money'];
+  icons.forEach((name, i) => {
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(12 * s, (12 + i * 50) * s, 38 * s, 38 * s);
+    drawIcon(ctx, name, 19 * s, (19 + i * 50) * s, 24 * s, '#ffffff', 2);
+  });
+  // a window or two
+  if (coworker) {
+    ctx.fillStyle = '#ece9d8';
+    ctx.fillRect(110 * s, 40 * s, 300 * s, 170 * s);
+    ctx.fillStyle = '#3d82f5';
+    ctx.fillRect(110 * s, 40 * s, 300 * s, 20 * s);
+    ctx.fillStyle = '#cfcfcf';
+    for (let i = 0; i < 6; i++) ctx.fillRect(122 * s, (74 + i * 20) * s, (120 + ((i * 53) % 150)) * s, 9 * s);
+  } else {
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    ctx.font = `${Math.round(40 * s)}px "Bungee", Impact, sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillText('GLOBAL', w - 18 * s, h - 110 * s);
+    ctx.fillText('SOLUTIONS', w - 18 * s, h - 66 * s);
     ctx.textAlign = 'left';
-    ctx.fillText(text.slice(0, 22), 60, 70);
+  }
+  // taskbar
+  ctx.fillStyle = coworker ? '#26292d' : '#1d46b0';
+  ctx.fillRect(0, h - 26 * s, w, 26 * s);
+  ctx.fillStyle = '#2c9a38';
+  ctx.fillRect(0, h - 24 * s, 70 * s, 22 * s);
+  ctx.fillStyle = '#fff';
+  ctx.font = `italic bold ${Math.round(14 * s)}px Inter, Arial`;
+  ctx.fillText('start', 16 * s, h - 8 * s);
+  if (text) {
+    // call card
+    const cx = 110 * s;
+    const cy = 64 * s;
+    const cw = w - 140 * s;
+    const ch = 132 * s;
+    ctx.fillStyle = 'rgba(8,20,14,0.92)';
+    ctx.fillRect(cx, cy, cw, ch);
+    ctx.fillStyle = ringing ? '#ffe14d' : '#2fd36b';
+    ctx.fillRect(cx, cy, cw, 6 * s);
+    drawIcon(ctx, 'phone', cx + 16 * s, cy + 24 * s, 34 * s, ringing ? '#ffe14d' : '#2fd36b', 2.4);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.round(26 * s)}px Inter, Arial`;
+    ctx.fillText(stripEmoji(text).slice(0, 22), cx + 64 * s, cy + 50 * s);
     if (trust !== null) {
-      ctx.fillStyle = '#333';
-      ctx.fillRect(60, 90, w - 90, 16);
+      ctx.fillStyle = '#26332c';
+      ctx.fillRect(cx + 18 * s, cy + 82 * s, cw - 36 * s, 20 * s);
       ctx.fillStyle = trust > 66 ? '#2fd36b' : trust > 33 ? '#ffc93c' : '#ff4d4d';
-      ctx.fillRect(60, 90, ((w - 90) * trust) / 100, 16);
+      ctx.fillRect(cx + 18 * s, cy + 82 * s, ((cw - 36 * s) * trust) / 100, 20 * s);
+      ctx.fillStyle = '#9fb8a8';
+      ctx.font = `bold ${Math.round(14 * s)}px Inter, Arial`;
+      ctx.fillText(`TRUST ${Math.round(trust)}`, cx + 18 * s, cy + 122 * s);
     }
   }
 }
@@ -299,7 +340,7 @@ export function textSprite(text, { bg = 'rgba(255,255,255,0.95)', fg = '#111', f
     ctx.textAlign = 'center';
     lines.forEach((l, i) => ctx.fillText(l, w / 2, pad + 28 + i * 36));
   });
-  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, toneMapped: false });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(w / 380, h / 380, 1);
   sprite.renderOrder = 10;
@@ -363,7 +404,7 @@ export function terrazzoMaps(repeat) {
     }
   }
   const chips = ['#7a6a55', '#a8473a', '#3f5e4f', '#e9e2d0', '#5a5047', '#c08a4a', '#8c8c86', '#2e3a33'];
-  for (let i = 0; i < 26000; i++) {
+  for (let i = 0; i < 20000; i++) {
     cc.fillStyle = chips[(Math.random() * chips.length) | 0];
     cc.globalAlpha = 0.35 + Math.random() * 0.6;
     const r = Math.random() < 0.92 ? 1 + Math.random() * 2.2 : 3 + Math.random() * 4;
@@ -410,14 +451,23 @@ export function terrazzoMaps(repeat) {
   const nrm = mk();
   const nc = nrm.getContext('2d');
   const img = nc.createImageData(N, N);
+  // flat normal everywhere, then only the pixels near grout lines get real normals
+  const u32 = new Uint32Array(img.data.buffer);
+  u32.fill((255 << 24) | (255 << 16) | (128 << 8) | 128);
   const height = (x, y) => {
     const gx = Math.min(x % s, s - (x % s));
     const gy = Math.min(y % s, s - (y % s));
     const d = Math.min(gx, gy);
     return d < grout / 2 ? 0 : d < grout ? (d - grout / 2) / (grout / 2) : 1;
   };
+  const nearGrout = (v) => {
+    const m = v % s;
+    return m <= grout + 1 || s - m <= grout + 1;
+  };
   for (let y = 0; y < N; y++) {
+    const rowNear = nearGrout(y);
     for (let x = 0; x < N; x++) {
+      if (!rowNear && !nearGrout(x)) continue;
       const dx = height(x + 1, y) - height(x - 1 + N, y);
       const dy = height(x, y + 1) - height(x, y - 1 + N);
       const nx = -dx * 2.5;
@@ -560,6 +610,6 @@ export function exitSignTexture() {
     ctx.fillStyle = '#eafff0';
     ctx.font = 'bold 54px Inter, Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('EXIT 🏃', w / 2, 68);
+    ctx.fillText('EXIT', w / 2, 68);
   });
 }

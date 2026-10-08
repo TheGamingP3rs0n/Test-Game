@@ -5,7 +5,7 @@ export function quotaFor(day) {
 }
 
 export function baiterChanceFor(day) {
-  if (day <= 1) return 0.08;
+  if (day <= 1) return 0.12;
   return Math.min(0.35, 0.12 + day * 0.035);
 }
 
@@ -20,19 +20,26 @@ export const APPS = [
   { id: 'notes', name: 'Notes', icon: '📝', day: 1 },
   { id: 'browser', name: 'Browser', icon: '🌐', day: 1 },
   { id: 'cashier', name: 'Cashier', icon: '💰', day: 1 },
+  { id: 'giftcards', name: 'Gift Cards', icon: '🎁', day: 1 },
+  { id: 'creditcard', name: 'Credit Card', icon: '💳', day: 1 },
+  { id: 'identity', name: 'Identity', icon: '🆔', day: 1 },
   { id: 'playbook', name: 'Playbook', icon: '📘', day: 1 },
   { id: 'messenger', name: 'Messenger', icon: '💬', day: 1 },
   { id: 'files', name: 'Files', icon: '📁', day: 1 },
   { id: 'antivirus', name: 'DefendoMax', icon: '🛡️', day: 1 },
   { id: 'recorder', name: 'Recorder', icon: '⏺️', day: 1 },
   { id: 'paint', name: 'Paint', icon: '🎨', day: 2 },
-  { id: 'camera', name: 'Camera', icon: '📷', day: 2 },
   { id: 'docforge', name: 'DocForge', icon: '📄', day: 3 },
   { id: 'siteforge', name: 'SiteForge', icon: '🕸️', day: 4 },
+  { id: 'scamazon', name: 'Scamazon', icon: '🛒', day: 1 },
+  { id: 'meteorcookie', name: 'Meteor Cookie', icon: '🍪', day: 1 },
+  { id: 'disscord', name: 'Disscord', icon: '💬', day: 1 },
+  { id: 'rainbit', name: 'Rainbit', icon: '🎰', day: 1 },
 ];
 
-export function appsForDay(day) {
-  return APPS.filter((a) => a.day <= day).map((a) => a.id);
+export function appsForDay() {
+  // every app is available from day 1 (no locked apps)
+  return APPS.map((a) => a.id);
 }
 
 export const SHOP = [

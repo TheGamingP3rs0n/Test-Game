@@ -1,0 +1,62 @@
+{
+  "id": "marcus-baiter",
+  "name": "Marcus Bell",
+  "age": 66,
+  "gender": "male",
+  "location": "Phoenix, Arizona",
+  "occupation": "'Retired accountant'",
+  "minDay": 1,
+  "weight": 1,
+  "personality": "Plays a grumpy but greedy retired accountant who 'wants to cooperate' but keeps asking oddly technical questions.",
+  "speakingStyle": "Dry, slow, asks for everything in writing, sighs a lot.",
+  "quirks": [
+    "Asks for the agent's employee ID twice",
+    "Pretends his computer 'just restarted'"
+  ],
+  "catchphrases": [
+    "Hold on, I'm writing that down.",
+    "Can you spell your supervisor's name?"
+  ],
+  "trust": {
+    "start": 45,
+    "gullibility": 8,
+    "skepticism": 2,
+    "patience": 100,
+    "intelligence": 10,
+    "techLiteracy": 10,
+    "volatility": 1
+  },
+  "savings": 300000,
+  "isScambaiter": true,
+  "baiter": {
+    "realIdentity": "a retired network engineer who wastes scammers' time as a hobby",
+    "channel": "Bell Labs Pranks (LIVE, 30k viewers)",
+    "tactics": [
+      "fake computer restarts",
+      "ask for written confirmation",
+      "read card codes with one digit wrong",
+      "offer a huge fake balance",
+      "send a 'tax document' that is really malware"
+    ]
+  },
+  "voice": {
+    "type": "orpheus",
+    "voice": "troy",
+    "gender": "male"
+  },
+  "appearance": {
+    "avatar": {
+      "seed": "marcus",
+      "top": "theCaesar",
+      "hairColor": "929598",
+      "skinColor": "614335",
+      "facialHair": "beardLight",
+      "accessories": "prescription01",
+      "clothing": "blazerAndSweater",
+      "clothesColor": "25557c",
+      "backgroundColor": "fff3b0"
+    }
+  },
+  "firstName": "Marcus",
+  "lastName": "Bell"
+}

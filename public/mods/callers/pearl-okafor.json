@@ -1,0 +1,59 @@
+{
+  "id": "pearl-okafor",
+  "name": "Pearl Okafor",
+  "age": 79,
+  "gender": "female",
+  "location": "Savannah, Georgia",
+  "occupation": "Retired church choir director",
+  "minDay": 1,
+  "weight": 2,
+  "personality": "Warm, devout and chatty grandmother who treats every caller like a long-lost grandson. Very trusting of anyone polite, but goes ice-cold if someone is rude or swears.",
+  "speakingStyle": "Sings little hymn fragments, calls everyone 'baby', long tangents about the choir.",
+  "quirks": [
+    "Puts the phone down to stir her gumbo",
+    "Asks the agent to pray with her"
+  ],
+  "catchphrases": [
+    "Well bless your heart, baby.",
+    "The Lord sent you to me today!"
+  ],
+  "trust": {
+    "start": 55,
+    "gullibility": 8,
+    "skepticism": 2,
+    "patience": 80,
+    "intelligence": 5,
+    "techLiteracy": 1,
+    "volatility": 4
+  },
+  "savings": 31000,
+  "triggers": [
+    {
+      "when": "the agent is rude, curses or rushes her",
+      "reaction": "she gets offended and trust drops hard"
+    },
+    {
+      "when": "the agent mentions family or church",
+      "reaction": "she warms up a lot"
+    }
+  ],
+  "voice": {
+    "type": "orpheus",
+    "voice": "diana",
+    "gender": "female"
+  },
+  "appearance": {
+    "avatar": {
+      "seed": "pearl",
+      "top": "curvy",
+      "hairColor": "e8e1e1",
+      "skinColor": "614335",
+      "accessories": "round",
+      "clothing": "blazerAndShirt",
+      "clothesColor": "ff488e",
+      "backgroundColor": "c0aede"
+    }
+  },
+  "firstName": "Pearl",
+  "lastName": "Okafor"
+}

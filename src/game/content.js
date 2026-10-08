@@ -3,7 +3,7 @@
 import { db } from '../core/db.js';
 import { settings } from '../core/store.js';
 import { pick, chance, uid } from '../core/util.js';
-import { proceduralCaller, buildProfile } from './profile.js';
+import { proceduralCaller, proceduralBaiter, buildProfile } from './profile.js';
 
 export const content = {
   callers: [],
@@ -47,9 +47,29 @@ export function normalizeCaller(raw, source = 'mod') {
   return c;
 }
 
+/** Which scam app this scenario's payout flows through (so the caller brings the problem
+ *  and reads the matching code, and the player doesn't have to guess what to collect). */
+export function scamAppForScenario(sc) {
+  if (sc.scamApp) return sc.scamApp;
+  const hay = `${sc.id} ${sc.name} ${sc.impersonate} ${(sc.keywords || []).join(' ')}`.toLowerCase();
+  if (/tax|irs|ird|government|social security|ssn|warrant|police|cyber|arrest|immigration|identity/.test(hay)) return 'identity';
+  if (/bank|fraud|refund|customs|delivery|parcel|package|shipping|billing|subscription|debit|credit card/.test(hay)) return 'creditcard';
+  return 'giftcards'; // tech support, lottery/sweepstakes, crypto on-ramp -> gift-card fees
+}
+
+const APP_ASK = {
+  giftcards: 'They pay by buying gift cards and reading you the code on the back.',
+  creditcard: 'They pay by reading you their card verification code to "process" a charge/refund.',
+  identity: 'They "verify their record" by reading you their ID / verification number.',
+};
+
 export function normalizeScenario(raw) {
   if (!raw?.id || !raw?.name) throw new Error('Scenario needs "id" and "name"');
-  return { unlockDay: 1, payout: 1, icon: '📞', playbook: [], keywords: [], impersonate: 'a company representative', leadSource: 'Unknown lead', callerContext: 'You called this number.', ...raw };
+  const sc = { unlockDay: 1, payout: 1, icon: '📞', playbook: [], keywords: [], impersonate: 'a company representative', leadSource: 'Unknown lead', callerContext: 'You called this number.', ...raw };
+  sc.scamApp = scamAppForScenario(sc);
+  sc.payAsk = APP_ASK[sc.scamApp];
+  sc.unlockDay = 1; // every scam is available from the start
+  return sc;
 }
 
 export function normalizeEvent(raw) {
@@ -144,8 +164,11 @@ export function nextCaller({ day, seen = new Set(), baiterChance = 0.15, gullibl
   const baiters = pool.filter((c) => c.isScambaiter);
   const normals = pool.filter((c) => !c.isScambaiter);
   let def;
-  if (baiters.length && chance(baiterChance)) def = pick(baiters);
-  else if (normals.length && chance(0.62)) {
+  if (chance(baiterChance)) {
+    // hand-made scambaiters first; otherwise a procedural one, so they show up from day 1
+    def = baiters.length && chance(0.6) ? pick(baiters) : proceduralBaiter(`${day}-${Math.floor(Math.random() * 1e9)}`, { day });
+  }
+  if (def) { /* picked a scambaiter */ } else if (normals.length && chance(0.62)) {
     // weighted pick, custom clients get a little boost so you meet them
     const weighted = normals.flatMap((c) => Array(Math.max(1, Math.round((c.weight || 1) * (c.source === 'custom' ? 2 : 1) + (gullibleBias && (c.trust?.gullibility || 5) >= 7 ? gullibleBias : 0)))).fill(c));
     def = pick(weighted);

@@ -7,21 +7,60 @@
   "gender": "female",
   "location": "Bangor, Maine",
   "occupation": "'Retired' (she says)",
-  "minDay": 2,
+  "minDay": 1,
   "weight": 2,
   "personality": "Presents as an adorable, extremely gullible and painfully slow grandmother who wants to do everything the agent says.",
   "speakingStyle": "Sweet, slow, overly agreeable, a little too giggly. Reads every number wrong.",
-  "quirks": ["Her computer is always 'loading'", "Reads gift card codes one character at a time and gets them wrong"],
-  "catchphrases": ["Oh, you're SUCH a help, young man.", "Now which one is the 'any' key?"],
-  "trust": { "start": 65, "gullibility": 10, "skepticism": 1, "patience": 100, "intelligence": 9, "techLiteracy": 9, "volatility": 3 },
+  "quirks": [
+    "Her computer is always 'loading'",
+    "Reads gift card codes one character at a time and gets them wrong"
+  ],
+  "catchphrases": [
+    "Oh, you're SUCH a help, young man.",
+    "Now which one is the 'any' key?"
+  ],
+  "trust": {
+    "start": 65,
+    "gullibility": 10,
+    "skepticism": 1,
+    "patience": 100,
+    "intelligence": 9,
+    "techLiteracy": 9,
+    "volatility": 3
+  },
   "savings": 250000,
   "isScambaiter": true,
   "baiter": {
     "realIdentity": "Dale, a 34-year-old IT security guy who runs the scambaiting channel 'Grandma Gets Even' and is doing a voice-changer granny impression",
     "channel": "Grandma Gets Even (LIVE, 48k viewers)",
-    "tactics": ["pretend her computer is incredibly slow", "read gift card codes wrong on purpose", "ask the agent to spell everything", "go 'find her glasses' for ages", "offer a huge fake bank balance to hook greed", "send a 'bank statement' file that is really malware"]
+    "tactics": [
+      "pretend her computer is incredibly slow",
+      "read gift card codes wrong on purpose",
+      "ask the agent to spell everything",
+      "go 'find her glasses' for ages",
+      "offer a huge fake bank balance to hook greed",
+      "send a 'bank statement' file that is really malware"
+    ]
   },
-  "details": { "petType": "cat", "petName": "Admiral Fluffington" },
-  "voice": { "type": "orpheus", "voice": "diana", "gender": "female" },
-  "appearance": { "avatar": { "seed": "agnes", "top": "bigHair", "hairColor": "e8e1e1", "skinColor": "ffdbb4", "accessories": "prescription01", "clothing": "collarAndSweater", "clothesColor": "b1e2ff", "backgroundColor": "b6e3f4" } }
+  "details": {
+    "petType": "cat",
+    "petName": "Admiral Fluffington"
+  },
+  "voice": {
+    "type": "orpheus",
+    "voice": "diana",
+    "gender": "female"
+  },
+  "appearance": {
+    "avatar": {
+      "seed": "agnes",
+      "top": "bigHair",
+      "hairColor": "e8e1e1",
+      "skinColor": "ffdbb4",
+      "accessories": "prescription01",
+      "clothing": "collarAndSweater",
+      "clothesColor": "b1e2ff",
+      "backgroundColor": "b6e3f4"
+    }
+  }
 }

@@ -28,7 +28,7 @@ export class Computer {
     bus.on('computer:virus', (on) => this.setVirus(on));
     bus.on('call:file', (file) => this.incomingFile(file));
     bus.on('call:remote', ({ code }) => this.desktop?.notify(`🖥️ Remote session ready. ID ${code}`, { actions: [{ label: 'Open RemoteHelp', primary: true, onClick: () => this.desktop.open('remote') }] }));
-    bus.on('call:payment', (p) => this.desktop?.notify(`💸 Incoming ${p.method.replace(/_/g, ' ')} from ${p.from}: $${p.amount.toLocaleString()}`, { actions: [{ label: 'Open Cashier', primary: true, onClick: () => this.desktop.open('cashier') }] }));
+    bus.on('call:payment', (p) => { const APP = { giftcards: 'Gift Cards', creditcard: 'Credit Card', identity: 'Identity' }; this.desktop?.notify(`${p.from} read you a code — enter it in ${APP[p.app] || 'Cashier'} to collect $${p.amount.toLocaleString()}`, { icon: 'payout', actions: [{ label: `Open ${APP[p.app] || 'Cashier'}`, primary: true, onClick: () => this.desktop.open(p.app || 'cashier') }] }); });
     bus.on('chat:message', (m) => {
       if (this.wrap?.isConnected && !this.desktop.windows.has('messenger')) this.desktop.notify(`💬 ${m.from === 'boss' ? 'BOSS' : m.from[0].toUpperCase() + m.from.slice(1)}: ${m.text}`, { ms: 4000 });
     });
@@ -38,14 +38,12 @@ export class Computer {
   /** Build a fresh desktop for the day (apps unlock as days progress). */
   newDay() {
     this.desktop?.closeAll();
-    const unlocked = new Set(this.game.day?.apps || APPS.map((a) => a.id));
     const apps = buildApps({ game: this.game, computer: this });
-    const locked = new Set(APPS.filter((a) => !unlocked.has(a.id)).map((a) => a.id));
     this.desktop = new Desktop({
       theme: 'player',
       apps,
-      icons: APPS.map((a) => a.id),
-      locked,
+      icons: [...APPS.map((a) => a.id), 'settings', 'recycle'],
+      customizable: true,
       user: `${this.game.run?.alias || 'Agent "Steve"'}`,
       wallpaperText: 'GLOBAL<br>SOLUTIONS<br><span style="font-size:18px">pvt. ltd.</span>',
       onStartAction: () => this.game.closeComputer(),
