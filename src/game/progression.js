@@ -34,6 +34,7 @@ export const APPS = [
   { id: 'scamazon', name: 'Scamazon', icon: '🛒', day: 1 },
   { id: 'meteorcookie', name: 'Meteor Cookie', icon: '🍪', day: 1 },
   { id: 'disscord', name: 'Disscord', icon: '💬', day: 1 },
+  { id: 'rainbit', name: 'Rainbit', icon: '🎰', day: 1 },
 ];
 
 export function appsForDay() {

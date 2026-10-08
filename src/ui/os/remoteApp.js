@@ -113,7 +113,7 @@ function victimDesktop(game, pc, caller) {
     const w = desktop.open('mycomputer', { key: f.name, title: f.name, width: 520, height: 380 });
     if (!w) return;
     if (f.kind === 'image') {
-      w.setBody(el('div.photo', el('div', { style: { textAlign: 'center' } }, f.emoji, el('div', { style: { fontSize: '16px', marginTop: '6px' } }, f.caption, f.fact ? el('div', el('span.fact', { style: { background: '#fff3a1', cursor: 'pointer', fontSize: '13px', padding: '2px 6px' }, onclick: () => grab({ label: f.fact[0], value: f.fact[1] }) }, `📌 Save "${f.fact[1]}" as intel`)) : null))));
+      w.setBody(el('div.photo', el('div', { style: { textAlign: 'center' } }, f.emoji, el('div', { style: { fontSize: '16px', marginTop: '6px' } }, f.caption, f.fact ? el('div', el('span.fact', { style: { background: '#fff3a1', cursor: 'pointer', fontSize: '13px', padding: '2px 6px' }, onclick: () => grab({ label: f.fact[0], value: f.fact[1] }) }, `Copy "${f.fact[1]}"`)) : null))));
       ev(f.event || `opened your photo ${f.name}`, Math.random() < 0.5);
       return;
     }
@@ -130,16 +130,22 @@ function victimDesktop(game, pc, caller) {
     const view = el('div.fileview');
     for (const seg of parseFacts(f.content || '')) {
       if (seg.text) view.append(seg.text);
-      else view.append(el('span.fact', { title: 'Click to save as intel', onclick: () => grab(seg.fact) }, seg.fact.value));
+      else view.append(el('span.fact', { title: 'Click to copy', onclick: () => grab(seg.fact) }, seg.fact.value));
     }
     w.setBody(el('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
-      el('div.app-toolbar', el('span', { style: { fontSize: '12px', color: '#555', flex: 1 } }, '💡 Click highlighted details to save them as intel'), el('button.xp-btn', { onclick: () => { w.close(); f.deleted = true; ev(`deleted your file "${f.name}"`, true); } }, '🗑 Delete file')),
+      el('div.app-toolbar', el('span', { style: { fontSize: '12px', color: '#555', flex: 1 } }, 'Click any highlighted detail to copy it (and save it as intel)'), el('button.xp-btn', { onclick: () => { w.close(); f.deleted = true; ev(`deleted your file "${f.name}"`, true); } }, '🗑 Delete file')),
       el('div', { style: { flex: 1, overflow: 'auto' } }, view)));
     ev(f.event || `opened your file ${f.name}`, Math.random() < 0.45);
   }
 
+  // Clicking golden info copies it to the clipboard (paste it straight into a scam app or
+  // the call) and also files it under Intel.
   function grab(fact) {
-    if (addIntel(game, fact)) bus.emit('toast', { text: `🕵️ Intel saved: ${fact.label} — ${fact.value}`, ms: 2500 });
+    const value = String(fact.value);
+    try { navigator.clipboard?.writeText(value); } catch { /* clipboard blocked */ }
+    game.clipboard = value;
+    const saved = addIntel(game, fact);
+    bus.emit('toast', { icon: 'clip', title: 'Copied', text: `${fact.label}: ${value}${saved ? ' — saved to Intel' : ''}. Paste it with Ctrl+V.`, ms: 2600 });
   }
 
   function explorer(start) {

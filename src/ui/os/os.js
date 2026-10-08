@@ -2,8 +2,17 @@
 // desktop icons, notifications. Used for your work PC and for victims' PCs.
 import { el, clamp, clockText, money } from '../../core/util.js';
 import { sfx } from '../../core/audio.js';
+import { bus } from '../../core/bus.js';
 import { icon, iconFor } from '../icons.js';
 import { APP_ICONS } from '../appIcons.js';
+import { settings, updateSettings } from '../../core/store.js';
+
+export const WALLPAPERS = [
+  ['green', 'Global Solutions'], ['bliss', 'Rolling hills'], ['night', 'Kolkata night'], ['koi', 'Koi pond'],
+  ['sunset', 'Sunset'], ['classic', 'Classic teal'], ['chai', 'Masala chai'], ['grid', 'Synthwave'],
+];
+const CELL = { sm: [76, 84], md: [90, 98], lg: [108, 118] };
+const UNMOVABLE_TO_TRASH = new Set(['recycle', 'settings']);
 
 /** Tile colours for app icons (anything else gets a hue from its name). */
 const TILE = {
@@ -136,7 +145,7 @@ export class Desktop {
    * @param apps     { id: { name, icon, open(desktop, opts) -> {title, body, width, height} } }
    * @param icons    list of app ids (or {id,name,icon,onOpen}) shown on the desktop
    */
-  constructor({ theme = 'player', apps = {}, icons = [], user = 'Agent', wallpaperText = '', vm = false, startItems = null, locked = new Set(), onStartAction = null }) {
+  constructor({ theme = 'player', apps = {}, icons = [], user = 'Agent', wallpaperText = '', vm = false, startItems = null, locked = new Set(), onStartAction = null, customizable = false }) {
     this.apps = apps;
     this.windows = new Map();
     this.theme = theme;
@@ -161,19 +170,135 @@ export class Desktop {
     this.root.addEventListener('mousedown', (e) => {
       if (this.startMenu && !this.startMenu.contains(e.target)) this.closeStart();
     });
+    this.customizable = customizable;
+    if (customizable) {
+      this.iconLayer.classList.add('free');
+      this.applyLook();
+      new ResizeObserver(() => this.layoutIcons()).observe(this.iconLayer);
+    }
     this.setIcons(icons);
   }
 
+  // ---------------------------------------------------------------- customizable desktop (player PC)
+  get prefs() {
+    const d = settings.desktop || {};
+    return { pos: d.pos || {}, trash: d.trash || [], wallpaper: d.wallpaper || 'green', iconSize: d.iconSize || 'md' };
+  }
+  savePrefs(patch) {
+    updateSettings({ desktop: { ...this.prefs, ...patch } });
+  }
+  applyLook() {
+    const p = this.prefs;
+    for (const c of [...this.root.classList]) if (c.startsWith('wp-') || c.startsWith('ic-')) this.root.classList.remove(c);
+    this.root.classList.add(`wp-${p.wallpaper}`, `ic-${p.iconSize}`);
+  }
+  setWallpaper(id) { this.savePrefs({ wallpaper: id }); this.applyLook(); }
+  setIconSize(sz) { this.savePrefs({ iconSize: sz }); this.applyLook(); this.layoutIcons(); }
+  arrangeIcons() { this.savePrefs({ pos: {} }); this.layoutIcons(); }
+  trashApp(id) {
+    if (UNMOVABLE_TO_TRASH.has(id)) return;
+    const t = new Set(this.prefs.trash); t.add(id);
+    this.savePrefs({ trash: [...t] }); this.setIcons(this.allIcons); sfx('shred'); bus.emit('desktop:changed');
+    this.notify(`${this.apps[id]?.name || id} moved to the Recycle Bin.`, { icon: 'trash', ms: 2500 });
+  }
+  restoreApp(id) {
+    this.savePrefs({ trash: id ? this.prefs.trash.filter((x) => x !== id) : [] });
+    this.setIcons(this.allIcons);
+    bus.emit('desktop:changed');
+  }
+  /** Grid geometry for the current icon size and layer height. */
+  grid() {
+    const [cw, ch] = CELL[this.prefs.iconSize] || CELL.md;
+    const h = this.iconLayer.clientHeight || 520;
+    const w = this.iconLayer.clientWidth || 900;
+    return { cw, ch, rows: Math.max(1, Math.floor(h / ch)), cols: Math.max(1, Math.floor(w / cw)) };
+  }
+  layoutIcons() {
+    if (!this.customizable) return;
+    const { cw, ch, rows, cols } = this.grid();
+    const pos = this.prefs.pos;
+    const taken = new Set();
+    const nodes = [...this.iconLayer.children];
+    const place = (n, c, r) => { taken.add(`${c},${r}`); n.style.left = `${c * cw}px`; n.style.top = `${r * ch}px`; n.style.width = `${cw - 6}px`; };
+    const free = [];
+    for (const n of nodes) {
+      const p = pos[n.dataset.app];
+      if (p && p[0] < cols && p[1] < rows && !taken.has(`${p[0]},${p[1]}`)) place(n, p[0], p[1]); else free.push(n);
+    }
+    let i = 0;
+    for (const n of free) {
+      while (taken.has(`${Math.floor(i / rows)},${i % rows}`)) i++;
+      place(n, Math.floor(i / rows), i % rows);
+    }
+  }
+  enableIconDrag(node, appId) {
+    node.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const start = { x: e.clientX, y: e.clientY, left: node.offsetLeft, top: node.offsetTop };
+      let dragging = false;
+      const move = (ev) => {
+        const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
+        if (!dragging && Math.hypot(dx, dy) < 6) return;
+        dragging = true;
+        node.classList.add('dragging');
+        // the layer may be CSS-scaled (the monitor is a scaled 3D-ish panel): convert
+        const scale = this.iconLayer.getBoundingClientRect().width / (this.iconLayer.offsetWidth || 1) || 1;
+        node.style.left = `${start.left + dx / scale}px`;
+        node.style.top = `${start.top + dy / scale}px`;
+        const bin = this.iconLayer.querySelector('[data-app="recycle"]');
+        if (bin && bin !== node) bin.classList.toggle('drop-target', overlaps(node, bin));
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        node.classList.remove('dragging');
+        if (!dragging) return this.open(appId);
+        node.dataset.justDragged = '1';
+        setTimeout(() => delete node.dataset.justDragged, 0);
+        const bin = this.iconLayer.querySelector('[data-app="recycle"]');
+        bin?.classList.remove('drop-target');
+        if (bin && bin !== node && overlaps(node, bin)) return this.trashApp(appId);
+        const { cw, ch, rows, cols } = this.grid();
+        const c = clamp(Math.round(node.offsetLeft / cw), 0, cols - 1);
+        const r = clamp(Math.round(node.offsetTop / ch), 0, rows - 1);
+        const pos = { ...this.prefs.pos };
+        // swap with whatever already sits in that cell
+        const cellOf = (n) => [Math.round(n.offsetLeft / cw), Math.round(n.offsetTop / ch)];
+        for (const other of this.iconLayer.children) {
+          if (other === node) continue;
+          const [oc, orow] = cellOf(other);
+          if (oc === c && orow === r) {
+            const mine = pos[appId] || cellOf({ offsetLeft: start.left, offsetTop: start.top });
+            pos[other.dataset.app] = mine;
+          } else if (!pos[other.dataset.app]) pos[other.dataset.app] = [oc, orow];
+        }
+        pos[appId] = [c, r];
+        this.savePrefs({ pos });
+        this.layoutIcons();
+        sfx('click');
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+  }
+
   setIcons(icons) {
+    this.allIcons = icons;
+    const trash = this.customizable ? new Set(this.prefs.trash) : new Set();
     this.iconLayer.replaceChildren(
       ...icons.map((ic) => {
         const app = typeof ic === 'string' ? { id: ic, ...this.apps[ic] } : ic;
-        if (!app || !app.name) return null;
+        if (!app || !app.name || trash.has(app.id)) return null;
         const locked = this.locked.has(app.id);
-        return el(`div.desk-icon${locked ? '.locked' : ''}`, { title: locked ? 'Unlocks on a later day' : app.name, dataset: { app: app.id }, onclick: () => (ic.onOpen ? ic.onOpen() : this.open(app.id)) },
+        const node = el(`div.desk-icon${locked ? '.locked' : ''}`, { title: locked ? 'Unlocks on a later day' : app.name, dataset: { app: app.id }, onclick: this.customizable ? null : () => (ic.onOpen ? ic.onOpen() : this.open(app.id)) },
           el('span.tile-wrap', appTile(app, 'lg'), locked ? el('span.lock-badge', icon('lock')) : null), el('span.desk-label', app.name));
+        if (this.customizable) this.enableIconDrag(node, app.id);
+        return node;
       }),
     );
+    if (this.customizable) requestAnimationFrame(() => this.layoutIcons());
+    if (this.customizable) this.layoutIcons();
   }
 
   /** Open (or focus) an app window. */
@@ -255,4 +380,10 @@ export class Desktop {
     if (ms) setTimeout(() => n.remove(), ms);
     return n;
   }
+}
+
+function overlaps(a, b) {
+  const r1 = a.getBoundingClientRect(), r2 = b.getBoundingClientRect();
+  const cx = r1.left + r1.width / 2, cy = r1.top + r1.height / 2;
+  return cx > r2.left && cx < r2.right && cy > r2.top && cy < r2.bottom;
 }

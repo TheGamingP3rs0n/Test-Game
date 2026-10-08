@@ -42,7 +42,8 @@ export class Computer {
     this.desktop = new Desktop({
       theme: 'player',
       apps,
-      icons: APPS.map((a) => a.id),
+      icons: [...APPS.map((a) => a.id), 'settings', 'recycle'],
+      customizable: true,
       user: `${this.game.run?.alias || 'Agent "Steve"'}`,
       wallpaperText: 'GLOBAL<br>SOLUTIONS<br><span style="font-size:18px">pvt. ltd.</span>',
       onStartAction: () => this.game.closeComputer(),

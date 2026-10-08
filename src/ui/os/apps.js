@@ -4,13 +4,17 @@ import { el, setText, money, clockText, uid, downloadBlob, dataURLToBlob } from 
 import { bus } from '../../core/bus.js';
 import { sfx } from '../../core/audio.js';
 import { content } from '../../game/content.js';
-import { COWORKERS, BOSS_CONTACT, coworkerReply } from '../../ai/coworkers.js';
 import { avatarDataUri } from '../portraits.js';
 import { remoteApp } from './remoteApp.js';
+import { messengerApp } from './messenger.js';
+export { bindChatStore } from './messenger.js';
 import { browserApp } from './browserApp.js';
-import { paintApp, recorderApp, docforgeApp, siteforgeApp } from './creativeApps.js';
+import { paintApp, docforgeApp, siteforgeApp } from './creativeApps.js';
 import { scamApp } from './scamApps.js';
 import { scamazonApp, meteorCookieApp, disscordApp } from './extraApps.js';
+import { rainbitApp } from './rainbit.js';
+import { pcSettingsApp, recycleBinApp } from './deskApps.js';
+import { phoneApp, recorderApp, antivirusApp } from './reskins.js';
 
 /** Persist a file in the run (paintings, photos, clips, documents). */
 export function saveFile(game, file) {
@@ -34,7 +38,7 @@ export function addIntel(game, fact) {
 export function buildApps(ctx) {
   const { game } = ctx;
   return {
-    phone: { name: 'Phone', icon: '📞', width: 420, height: 440, render: (win) => phoneApp(game, win) },
+    phone: { name: 'Phone', icon: '📞', width: 400, height: 560, render: (win) => phoneApp(game, win) },
     remote: { name: 'RemoteHelp', icon: '🖥️', width: 980, height: 620, render: (win) => remoteApp(game, win, ctx) },
     notes: { name: 'Notes', icon: '📝', width: 520, height: 460, render: () => notesApp(game) },
     browser: { name: 'Browser', icon: '🌐', width: 860, height: 560, render: (win, opts) => browserApp(game, win, opts) },
@@ -45,37 +49,21 @@ export function buildApps(ctx) {
     playbook: { name: 'Playbook', icon: '📘', width: 560, height: 520, render: () => playbookApp(game) },
     messenger: { name: 'Messenger', icon: '💬', width: 620, height: 460, render: (win) => messengerApp(game, win) },
     files: { name: 'Files', icon: '📁', width: 640, height: 440, render: (win) => filesApp(game, win, ctx) },
-    antivirus: { name: 'DefendoMax', icon: '🛡️', width: 420, height: 300, render: (win) => antivirusApp(game, win) },
-    recorder: { name: 'Recorder', icon: '⏺️', width: 460, height: 340, render: (win) => recorderApp(game, win) },
+    antivirus: { name: 'DefendoMax', icon: '🛡️', width: 720, height: 460, render: (win) => antivirusApp(game, win) },
+    recorder: { name: 'Recorder', icon: '⏺️', width: 760, height: 520, render: (win) => recorderApp(game, win) },
     paint: { name: 'Paint', icon: '🎨', width: 760, height: 560, render: (win) => paintApp(game, win) },
     docforge: { name: 'DocForge', icon: '📄', width: 820, height: 600, render: (win) => docforgeApp(game, win) },
     siteforge: { name: 'SiteForge', icon: '🕸️', width: 820, height: 600, render: (win) => siteforgeApp(game, win) },
     scamazon: { name: 'Scamazon', icon: '🛒', width: 680, height: 540, render: (win) => scamazonApp(game, win) },
     meteorcookie: { name: 'Meteor Cookie', icon: '🍪', width: 420, height: 520, render: (win) => meteorCookieApp(game, win) },
     disscord: { name: 'Disscord', icon: '💬', width: 560, height: 480, render: (win) => disscordApp(game, win) },
+    rainbit: { name: 'Rainbit', icon: '🎰', width: 820, height: 560, render: (win) => rainbitApp(game, win) },
+    settings: { name: 'Settings', icon: '⚙', width: 520, height: 520, render: (win) => pcSettingsApp(game, win) },
+    recycle: { name: 'Recycle Bin', icon: '🗑', width: 520, height: 400, render: (win) => recycleBinApp(game, win) },
   };
 }
 
 // ---------------------------------------------------------------------------
-function phoneApp(game, win) {
-  const body = el('div.pad');
-  const render = () => {
-    const c = game.calls;
-    body.replaceChildren(
-      el('h3', { style: { margin: '0 0 8px' } }, '📞 Line 1'),
-      c.state === 'ringing' ? el('div', el('p', `Incoming: ${c.caller.name}`), el('button.xp-btn.primary', { onclick: () => c.answer() }, 'Answer')) :
-      c.active ? el('div', el('p', `On call with ${c.caller.name} — ${Math.floor(c.callTime)}s`), el('button.xp-btn.red', { onclick: () => c.end('agent_hung_up') }, 'Hang up')) :
-      el('p', { style: { color: '#666' } }, 'No active call. Calls arrive automatically.'),
-      el('h3', { style: { margin: '14px 0 6px' } }, "Today's call log"),
-      el('div.list', (game.day?.callLog || []).slice().reverse().map((l) => el('div.li', el('span', l.paid ? '💰' : l.outcome === 'exposed' ? '🔴' : l.outcome === 'flagged' ? '🚩' : '📵'), el('span', { style: { flex: 1 } }, `${l.name} — ${l.scenario}`), el('b', l.paid ? money(l.paid) : l.outcome.replace(/_/g, ' '))))),
-    );
-  };
-  render();
-  const offs = ['call:ring', 'call:start', 'call:end'].map((e) => bus.on(e, render));
-  win.onClose = () => offs.forEach((o) => o());
-  return body;
-}
-
 function notesApp(game) {
   const ta = el('textarea.notes-area', { value: game.run.notes || '', oninput: () => (game.run.notes = ta.value), spellcheck: false });
   const intel = el('div.list.intel-list');
@@ -134,54 +122,6 @@ function playbookApp(game) {
   );
 }
 
-function messengerApp(game, win) {
-  const contacts = [...COWORKERS, BOSS_CONTACT];
-  game.run.chats = game.run.chats || {};
-  let current = contacts[0].id;
-  const unread = {};
-  const list = el('div.contacts');
-  const msgs = el('div.msgs');
-  const input = el('input', { placeholder: 'Message…', onkeydown: (e) => (e.stopPropagation(), e.key === 'Enter' && send()) });
-  const renderContacts = () => list.replaceChildren(...contacts.map((c) => el(`div.contact${c.id === current ? '.on' : ''}`, { onclick: () => ((current = c.id), (unread[c.id] = 0), renderAll()) }, el('img', { src: avatarDataUri(c.avatar, 'happy') }), el('div', el('b', c.name), el('div', { style: { fontSize: '11px', color: '#777' } }, `"${c.alias}"`)), unread[c.id] ? el('span.unread', unread[c.id]) : null)));
-  const renderMsgs = () => {
-    const thread = game.run.chats[current] || [];
-    msgs.replaceChildren(...thread.map((m) => el(`div.bub${m.from === 'me' ? '.me' : ''}`, m.text)));
-    msgs.scrollTop = msgs.scrollHeight;
-  };
-  const renderAll = () => (renderContacts(), renderMsgs());
-  const send = async () => {
-    const text = input.value.trim();
-    if (!text) return;
-    input.value = '';
-    const id = current;
-    (game.run.chats[id] = game.run.chats[id] || []).push({ from: 'me', text });
-    renderMsgs();
-    const contact = contacts.find((c) => c.id === id);
-    const reply = await coworkerReply(contact, game.run.chats[id], text);
-    game.run.chats[id].push({ from: id, text: reply });
-    if (current === id) renderMsgs();
-    else (unread[id] = (unread[id] || 0) + 1), renderContacts();
-    sfx('notify');
-  };
-  const off = bus.on('chat:message', (m) => {
-    if (current !== m.from) unread[m.from] = (unread[m.from] || 0) + 1;
-    renderAll();
-  });
-  win.onClose = off;
-  renderAll();
-  return el('div.chat', list, el('div.thread', msgs, el('div.compose', input, el('button.xp-btn.primary', { onclick: send }, 'Send'))));
-}
-
-/** Coworker messages are stored even when Messenger is closed. */
-export function bindChatStore(game) {
-  bus.on('chat:message', (m) => {
-    if (!game.run) return;
-    game.run.chats = game.run.chats || {};
-    const t = (game.run.chats[m.from] = game.run.chats[m.from] || []);
-    if (t[t.length - 1]?.text !== m.text) t.push({ from: m.from, text: m.text });
-  });
-}
-
 function filesApp(game, win) {
   const main = el('div.main');
   let folder = 'All';
@@ -212,28 +152,3 @@ function filesApp(game, win) {
   return el('div.split', side, main);
 }
 
-function antivirusApp(game, win) {
-  const bar = el('div');
-  const status = el('div', game.virus ? '⚠️ THREATS DETECTED. Your PC is infected!' : '✅ Your PC is protected (probably).');
-  const btn = el('button.xp-btn.primary', { onclick: () => scan() }, '🔍 Scan now');
-  const scan = () => {
-    btn.disabled = true;
-    let p = 0;
-    status.textContent = 'Scanning… (please do not panic)';
-    const t = setInterval(() => {
-      p += 4 + Math.random() * 6;
-      bar.style.width = `${Math.min(100, p)}%`;
-      if (p >= 100) {
-        clearInterval(t);
-        btn.disabled = false;
-        if (game.virus) {
-          setText(status, `☣️ Removed ${Math.floor(Math.random() * 3000) + 300} threats, including "BonziBuddy" and "grandma_gets_even.dll".`);
-          sfx('win');
-          if (game.chaos.active?.def.type === 'virus') game.chaos.finish(true);
-          else game.virus = false;
-        } else status.textContent = 'No threats found. DefendoMax would like a 5-star review.';
-      }
-    }, 200);
-  };
-  return el('div.av-scan', el('h3', { style: { margin: '0 0 6px' } }, '🛡️ DefendoMax Antivirus 2009'), status, el('div.bar', bar), btn);
-}

@@ -54,15 +54,15 @@ export function scriptedMessage(kind) {
   return { from: id, text };
 }
 
-export async function coworkerReply(contact, history, playerText) {
+export async function coworkerReply(contact, history, playerText, { group = false } = {}) {
   if (!hasApiKey()) {
     return pick(['lol', 'busy rn, on a call 📞', 'bro what', 'ok but did you hit quota yet', "can't talk, boss is watching", '🙏']);
   }
   try {
     return await chatText({
-      system: `You are ${contact.name} (fake American alias "${contact.alias}"), a coworker at a chaotic scam call center in Kolkata in a dark-comedy video game. Personality: ${contact.vibe}. You are texting the player in a work chat app. Reply with 1-2 short casual chat messages (max 30 words total). No emojis. Stay in character. ${contact.id === 'boss' ? 'You type in ALL CAPS and threaten absurd consequences.' : ''}`,
+      system: `You are ${contact.name} (fake American alias "${contact.alias}"), a coworker at a chaotic scam call center in Kolkata in a dark-comedy video game. Personality: ${contact.vibe}. ${group ? 'You are replying in the office group chat (#floor) where everyone can read it.' : 'You are texting the player privately in a work chat app.'} Reply with 1-2 short casual chat messages (max 30 words total). No emojis. Stay in character. ${contact.id === 'boss' ? 'You type in ALL CAPS and threaten absurd consequences.' : ''}`,
       messages: [
-        ...history.slice(-6).map((m) => ({ role: m.from === 'me' ? 'user' : 'assistant', content: m.text })),
+        ...history.slice(-6).map((m) => ({ role: m.from === 'me' ? 'user' : 'assistant', content: m.from === 'me' || m.from === contact.id ? m.text : `(${m.name || m.from} wrote) ${m.text}` })),
         { role: 'user', content: playerText },
       ],
       temperature: 1,

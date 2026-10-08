@@ -121,7 +121,8 @@ export function initCoop(game) {
     game.beginCoopDay(m.day, m.quota);
   });
   bus.on('net:notice', (text) => toast(text, 'warn', 4000, { icon: 'info' }));
-  bus.on('net:chat', (m) => { if (m.id !== net.id) toast(m.text, 'info', 4000, { icon: 'chat', title: m.name }); });
+  bus.on('net:chat', (m) => { if (m.id !== net.id) toast(m.text, 'info', 4000, { icon: 'chat', title: `${m.name} · #team` }); });
+  bus.on('net:dm', (m) => toast(m.text, 'info', 4500, { icon: 'chat', title: `${m.name} (private)` }));
   bus.on('net:close', () => {
     if (game.mp) {
       game.mp = false;

@@ -41,6 +41,8 @@ const MAP = {
   identity: ['fluent', 'contact-card-48'],
   scamazon: ['flat', 'shop'],
   disscord: ['fluent', 'bot-24'],
+  rainbit: ['fluent', 'coin-multiple-48'],
+  settings: ['flat', 'settings'],
 };
 
 const out = {};

@@ -6,6 +6,7 @@ import { sfx } from '../../core/audio.js';
 import { promptDialog } from '../dialog.js';
 import { saveFile } from './apps.js';
 import { renderSite } from './remoteApp.js';
+import { icon } from '../icons.js';
 
 function showToCaller(game, text) {
   const c = game.calls;
@@ -163,48 +164,6 @@ export function cameraApp(game, win) {
 }
 
 // ---------------------------------------------------------------- Recorder
-export function recorderApp(game, win) {
-  const status = el('div', { style: { margin: '10px 0' } }, 'Record clips of your calls to post online. Captures this browser tab (with sound).');
-  let rec = null;
-  let chunks = [];
-  let stream = null;
-  const startBtn = el('button.xp-btn.primary', { onclick: () => start() }, '⏺️ Start recording');
-  const stopBtn = el('button.xp-btn.red', { onclick: () => stop(), disabled: true }, '⏹ Stop');
-  const start = async () => {
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true, preferCurrentTab: true, selfBrowserSurface: 'include' });
-    } catch (err) {
-      status.textContent = `Couldn't start capture: ${err.message}`;
-      return;
-    }
-    chunks = [];
-    rec = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm' });
-    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-    rec.onstop = () => {
-      const blob = new Blob(chunks, { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-      saveFile(game, { kind: 'video', name: `clip_${new Date().toLocaleTimeString().replace(/\W/g, '')}.webm`, url, blob });
-      status.replaceChildren('✅ Clip saved to Files. ', el('button.xp-btn', { onclick: () => downloadBlob(blob, 'scam-call-center-clip.webm') }, '💾 Download now'));
-      stream.getTracks().forEach((t) => t.stop());
-      bus.emit('recorder', false);
-    };
-    stream.getVideoTracks()[0].addEventListener('ended', () => rec?.state === 'recording' && stop());
-    rec.start(500);
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    setText(status, '🔴 Recording…');
-    bus.emit('recorder', true);
-  };
-  const stop = () => {
-    if (rec?.state === 'recording') rec.stop();
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-  };
-  win.onClose = () => stop();
-  return el('div.pad', el('h3', { style: { marginTop: 0 } }, '⏺️ Screen Recorder'), status, el('div.row', startBtn, stopBtn),
-    el('p', { style: { fontSize: '12px', color: '#666' } }, 'Tip: your browser will ask what to share — pick this tab.'));
-}
-
 // ---------------------------------------------------------------- DocForge
 const DOCS = {
   warrant: { title: 'ARREST WARRANT', org: 'Internal Revenue Department — Tax Crimes Division', body: (f) => `This warrant is issued for the immediate arrest of <b>${f.name}</b> for failure to pay outstanding federal taxes in the amount of <b>${money(f.amount)}</b>. The subject may avoid arrest by settling the balance today with the assigned officer, <b>${f.officer}</b> (Badge #${f.badge}).` },
@@ -224,21 +183,30 @@ export function docforgeApp(game) {
     const d = DOCS[type];
     preview.innerHTML = `<div class="seal">OFFICIAL<br>SEAL<br>★★★</div><div style="text-align:center;font-size:12px;letter-spacing:2px">${escapeHtml(d.org)}</div><h1>${d.title}</h1><hr><p>${d.body(Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, k === 'amount' ? Number(v) || 0 : escapeHtml(v)])))}</p>${fields.notes ? `<p><i>${escapeHtml(fields.notes)}</i></p>` : ''}<p style="margin-top:24px">Date: ${new Date().toLocaleDateString()}<br>Signature: <span style="font-family:'Permanent Marker',cursive;font-size:20px">${escapeHtml(fields.officer)}</span></p><div class="stamp">${type === 'lottery' ? 'WINNER' : 'URGENT'}</div>`;
   };
-  const input = (k, label, type2 = 'text') => el('label', { style: { display: 'block', marginBottom: '6px' } }, label, el('input', { type: type2, value: fields[k], style: { width: '100%' }, oninput: (e) => ((fields[k] = e.target.value), render()), onkeydown: (e) => e.stopPropagation() }));
+  const input = (k, label, type2 = 'text') => el('label.df-field', el('span', label), el('input', { type: type2, value: fields[k], oninput: (e) => ((fields[k] = e.target.value), render()), onkeydown: (e) => e.stopPropagation() }));
   render();
   const describe = () => {
     const d = DOCS[type];
     const nameMatch = caller && fields.name.toLowerCase().includes(caller.lastName.toLowerCase());
     return `"${d.title}" from "${d.org}" — ${preview.querySelector('p').textContent} ${nameMatch ? '(It has your correct full name on it.)' : caller ? `(It is addressed to "${fields.name}", which is NOT your name!)` : ''}`;
   };
-  return el('div.split',
-    el('div.side', { style: { width: '250px', padding: '10px', background: '#f4f4f0' } },
-      el('label', 'Template', el('select', { style: { width: '100%', marginBottom: '8px' }, onchange: (e) => ((type = e.target.value), render()) }, Object.entries(DOCS).map(([k, d]) => el('option', { value: k }, d.title)))),
-      input('name', 'Recipient name'), input('amount', 'Amount ($)', 'number'), input('officer', 'Officer / signer'), input('badge', 'Badge / ID #'), input('notes', 'Extra note'),
-      el('div.col', { style: { gap: '6px', marginTop: '8px' } },
-        el('button.xp-btn.primary', { onclick: () => showToCaller(game, `showed you an official-looking document on your screen: ${describe()}`) && sfx('stamp') }, '📺 Show to caller'),
-        el('button.xp-btn', { onclick: () => { saveFile(game, { kind: 'document', name: `${DOCS[type].title.toLowerCase().replace(/\W+/g, '_')}.html`, html: preview.outerHTML }); bus.emit('toast', { text: '📄 Saved to Files' }); } }, '💾 Save'))),
-    el('div.main', { style: { background: '#888' } }, preview));
+  const DOC_ICON = { warrant: 'siren', certificate: 'shield', lottery: 'trophy', refund: 'receipt', customs: 'package', bank: 'bank' };
+  const chips = el('div.df-templates');
+  const renderChips = () => chips.replaceChildren(...Object.entries(DOCS).map(([k, d]) => el(`button.df-tpl${k === type ? '.on' : ''}`, { onclick: () => { type = k; render(); renderChips(); } }, icon(DOC_ICON[k] || 'file'), d.title.split(' ').slice(0, 3).join(' '))));
+  renderChips();
+  return el('div.df',
+    el('div.df-ribbon', el('span.df-brand', icon('file'), 'DocForge'), ...['File', 'Home', 'Insert', 'Layout', 'Review'].map((t, i) => el(`span.df-rtab${i === 1 ? '.on' : ''}`, t)), el('span.df-spacer'), el('span.df-user', 'Officer ', fields.officer.split(' ').slice(-1)[0])),
+    el('div.df-toolbar',
+      el('div.df-tool-group', ...['B', 'I', 'U'].map((t) => el('button.df-tool', t)), el('span.df-sep'), el('button.df-tool', icon('image'))),
+      chips,
+      el('span.df-spacer'),
+      el('button.df-action.primary', { onclick: () => showToCaller(game, `showed you an official-looking document on your screen: ${describe()}`) && sfx('stamp') }, icon('monitor'), 'Show to caller'),
+      el('button.df-action', { onclick: () => { saveFile(game, { kind: 'document', name: `${DOCS[type].title.toLowerCase().replace(/\W+/g, '_')}.html`, html: preview.outerHTML }); bus.emit('toast', { icon: 'save', text: 'Saved to Files' }); } }, icon('save'), 'Save')),
+    el('div.df-body',
+      el('div.df-props', el('div.df-props-h', 'Document details'), input('name', 'Recipient name'), input('amount', 'Amount ($)', 'number'), input('officer', 'Officer / signer'), input('badge', 'Badge / ID #'), input('notes', 'Extra note'),
+        el('p.df-hint', 'Tip: use the caller\'s real full name — they notice when it\'s wrong.')),
+      el('div.df-canvas', preview)),
+    el('div.df-status', el('span', 'Page 1 of 1'), el('span', 'English (Official)'), el('span.df-spacer'), el('span', '100%')));
 }
 
 // ---------------------------------------------------------------- SiteForge

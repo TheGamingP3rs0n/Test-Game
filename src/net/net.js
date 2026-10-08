@@ -114,6 +114,9 @@ class Net {
   chat(text) {
     this.send({ t: 'chat', text });
   }
+  dm(to, text) {
+    this.send({ t: 'dm', to, text });
+  }
 
   onMessage(data) {
     let m;
@@ -169,6 +172,9 @@ class Net {
         break;
       case 'chat':
         bus.emit('net:chat', m);
+        break;
+      case 'dm':
+        bus.emit('net:dm', m);
         break;
       case 'notice':
         bus.emit('net:notice', m.text);

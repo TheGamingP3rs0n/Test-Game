@@ -5,7 +5,7 @@
 // The game shows no emoji: anything that slips in (mod JSON, AI replies) is mapped to an
 // icon or removed by richText()/stripEmoji().
 import {
-  createElement, Send, Phone, PhoneOff, PhoneIncoming, PhoneMissed, PhoneCall, Mic, MicOff, Headphones, Headset, Monitor, MonitorOff,
+  createElement, Send, ArrowLeft, House, Phone, PhoneOff, PhoneIncoming, PhoneMissed, PhoneCall, Mic, MicOff, Headphones, Headset, Monitor, MonitorOff,
   FileText, Files, Flag, CircleDot, Banknote, X, Trash2, Shield, ShieldCheck, ShieldAlert, Star, Play, Pause, TriangleAlert, Folder, FolderOpen,
   Palette, Save, Image, Images, UserSearch, Landmark, Lock, LockOpen, Skull, User, Users, Settings, Zap, ZapOff, Camera, Globe, Disc, Network,
   Gift, Mail, Check, CircleCheck, KeyRound, Puzzle, Ban, Video, Volume2, Volume1, Download, Upload, Package, MessageCircle, Paperclip,
@@ -27,7 +27,7 @@ const ICONS = {
   warn: TriangleAlert, folder: Folder, 'folder-open': FolderOpen, palette: Palette, save: Save, image: Image, images: Images, spy: UserSearch,
   bank: Landmark, lock: Lock, unlock: LockOpen, skull: Skull, user: User, users: Users, settings: Settings, zap: Zap, 'zap-off': ZapOff, camera: Camera,
   globe: Globe, disc: Disc, web: Network, gift: Gift, mail: Mail, check: Check, 'check-circle': CircleCheck, key: KeyRound, puzzle: Puzzle, ban: Ban,
-  video: Video, volume: Volume2, 'volume-low': Volume1, download: Download, upload: Upload, package: Package, chat: MessageCircle, send: Send, clip: Paperclip,
+  video: Video, volume: Volume2, 'volume-low': Volume1, download: Download, upload: Upload, package: Package, chat: MessageCircle, send: Send, 'arrow-left': ArrowLeft, 'arrow-right': ArrowRight, home: House, clip: Paperclip,
   notes: NotebookPen, book: BookOpen, search: Search, wrench: Wrench, please: HandHeart, trend: TrendingUp, flame: Flame, hourglass: Hourglass,
   eye: Eye, smile: Smile, laugh: Laugh, frown: Frown, angry: Angry, annoyed: Annoyed, meh: Meh, target: Target, refresh: RefreshCw, cart: ShoppingCart,
   plus: Plus, biohazard: Biohazard, idea: Lightbulb, film: Clapperboard, tv: Tv, glasses: Glasses, rocket: Rocket, library: Library, news: Newspaper,
@@ -66,7 +66,7 @@ const EMOJI = {
   '🤳': 'selfie', '🧯': 'extinguisher', '🐄': 'cow', '🗣': 'speech', '📇': 'contact', '☕': 'chai', '🐘': 'gem', '🧑‍🎤': 'mic', '👀': 'eye',
   '🚨': 'siren', '🚓': 'police', '🌧': 'rain', '🌊': 'flood', '💣': 'bomb', '✈': 'rocket', '🏏': 'trophy', '🍵': 'chai', '🐮': 'cow',
   '📱': 'selfie', '💳': 'card', '🏧': 'bank', '⭐': 'star', '❤': 'heart', '🔔': 'bell', '⏰': 'clock', '🕹': 'joystick', '⌨': 'keyboard',
-  '🆔': 'id', '🧧': 'gift', '🎫': 'ticket', '🏷': 'tag', '🍪': 'cookie', '🔥‍': 'flame', '😀': 'smile', '😃': 'smile', '😄': 'laugh', '😅': 'laugh', '🤣': 'laugh',
+  '🆔': 'id', '🧧': 'gift', '🎫': 'ticket', '🏷': 'tag', '🍪': 'cookie', '🎰': 'gem', '🔥‍': 'flame', '😀': 'smile', '😃': 'smile', '😄': 'laugh', '😅': 'laugh', '🤣': 'laugh',
   '😭': 'frown', '😬': 'meh', '🤔': 'help', '😏': 'smile', '🙄': 'annoyed', '😩': 'frown', '😴': 'moon', '🥳': 'party', '👍': 'check', '👎': 'x',
 };
 

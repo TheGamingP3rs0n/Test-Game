@@ -978,7 +978,7 @@ export class Office {
 
   async buildCharacters() {
     const names = [...CHARACTERS.coworkers];
-    const deskNames = ['Rajesh', 'Kevin', 'Priya', 'Sunil', 'Amit', 'Neha', 'Vikram', 'Deepa'];
+    const deskNames = ['Raju', 'Priya', 'Vikram', 'Anjali']; // match the Messenger contacts
     // seats: 0-4 front row, 5-9 middle row, 10-13 back row (yours is between 12 and 13)
     const seatOrder = [1, 4, 6, 10].map((i) => this.seats[i]).filter(Boolean);
     const lines = ['Hello sir, I am calling from Windoze.', "Please do the needful ma'am.", 'Your computer is having virus!', 'Google Play card sir, Google Play!', 'Yes yes, I am Kevin from Texas.', 'Sir do not hang up sir!', 'Madam please open the black window.'];

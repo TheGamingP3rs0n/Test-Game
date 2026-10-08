@@ -143,6 +143,11 @@ wss.on('connection', (ws) => {
       case 'chat':
         broadcast({ t: 'chat', id, name: p.name, text: String(m.text || '').slice(0, 200) });
         break;
+      case 'dm': { // private message to one teammate
+        const to = players.get(Number(m.to));
+        if (to) send(to.ws, { t: 'dm', from: id, name: p.name, text: String(m.text || '').slice(0, 200) });
+        break;
+      }
       default:
         break;
     }

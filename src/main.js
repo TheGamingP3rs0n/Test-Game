@@ -74,6 +74,7 @@ async function boot() {
     });
   };
   initCoop(game);
+  bus.on('ui:openSettings', () => openSettings());
 
   game.ui = {
     showMenu,
