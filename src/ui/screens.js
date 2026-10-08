@@ -201,12 +201,15 @@ export class Screens {
       recap.isBaiter && recap.outcome !== 'flagged' ? el('p', { style: { color: 'var(--yellow)' } }, `🎥 Plot twist: ${c.firstName} was a scambaiter (${c.baiter?.channel || 'streaming'}).`) : null,
       settings.showCallerThoughts && recap.thoughts.length ? el('div', el('h3', 'What they were secretly thinking'), el('div.thoughts', recap.thoughts.map((t) => el('div', `“${t}”`)))) : null,
       el('div.row', { style: { justifyContent: 'flex-end', marginTop: '14px' } }, el('button.btn.primary', { onclick: () => m.close() }, recap.sandbox ? 'Done' : 'Back to work')));
+    this.recapModal?.close();
     const m = modal(content2, {
       onClose: () => {
+        if (this.recapModal === m) this.recapModal = null;
         if (recap.sandbox) bus.emit('practice:done');
         else if (this.game.playing && !this.game.computerOpen) this.game.world.player.requestLock();
       },
     });
+    this.recapModal = m;
     this.game.world.player.releaseLock();
   }
 

@@ -46,7 +46,7 @@ export function el(spec, props = {}, ...children) {
   }
   for (const [k, v] of Object.entries(props || {})) {
     if (v === undefined || v === null || v === false) continue;
-    if (k === 'style' && typeof v === 'object') Object.assign(node.style, v);
+    if (k === 'style' && typeof v === 'object') { for (const [sk, sv] of Object.entries(v)) { if (sk.startsWith('--')) node.style.setProperty(sk, sv); else node.style[sk] = sv; } }
     else if (k === 'dataset') Object.assign(node.dataset, v);
     else if (k === 'class') node.className += (node.className ? ' ' : '') + v;
     else if (k === 'html') node.innerHTML = htmlRenderer(v);

@@ -9,6 +9,7 @@ import { settings } from '../core/store.js';
 const MOOD_DIRECTION = { proud: '[suspiciously cheerful]', satisfied: '[grumbling]', disappointed: '[exasperated]', furious: '[shouting]', apocalyptic: '[furious screaming]' };
 
 export function showReview(screens, game, report) {
+  screens.recapModal?.close(); // a call cut off by the bell shouldn't cover the report
   const speech = el('div.boss-speech', el('span.thinking', 'Mr. Chatterjee is inhaling'));
   const stampSlot = el('div');
   const actions = el('div.col', { style: { marginTop: '12px' } });
